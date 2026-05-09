@@ -155,6 +155,10 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "\n%d created, %d skipped\n", written, skipped)
 
+	if written > 0 && !generateDryRun {
+		printChecklist(cmd, featureName, files, &conv)
+	}
+
 	// Run formatter on written files
 	runFormatter(writtenPaths, cmd)
 
@@ -450,4 +454,54 @@ func runGoFormat(files []string, cmd *cobra.Command) {
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "Warning: gofmt failed: %s\n", string(out))
 	}
+}
+
+func printChecklist(cmd *cobra.Command, featureName string, files []generator.GeneratedFile, conv *models.Convention) {
+	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
+	dim := color.New(color.Faint).SprintFunc()
+
+	roleSet := map[string]string{}
+	for _, f := range files {
+		base := strings.TrimSuffix(filepath.Base(f.Path), ".dart")
+		base = strings.TrimSuffix(base, ".go")
+		for _, role := range []string{"bloc", "usecase", "repository", "repository_impl", "screen", "request", "response"} {
+			if strings.HasSuffix(base, "_"+role) || strings.HasSuffix(base, "_"+strings.ReplaceAll(role, "_", "")) {
+				roleSet[role] = f.Path
+				break
+			}
+		}
+	}
+
+	leaf := filepath.Base(normalizeFeaturePathForCLI(featureName))
+	pascal := generator.ToPascalCase(leaf)
+	snake := generator.ToSnakeCase(leaf)
+	usecaseSuffix := conv.Naming.UsecaseSuffix
+	repoSuffix := conv.Naming.RepositorySuffix
+
+	fmt.Fprintln(cmd.OutOrStdout(), "\n"+cyan("Next steps:"))
+
+	step := 1
+	if _, hasBlocFile := roleSet["bloc"]; hasBlocFile {
+		if _, hasUsecase := roleSet["usecase"]; hasUsecase {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %d. Register in service locator:\n", step)
+			fmt.Fprintf(cmd.OutOrStdout(), "       %s\n", dim("sl.registerFactory(() => "+pascal+usecaseSuffix+"(sl()))"))
+			fmt.Fprintf(cmd.OutOrStdout(), "       %s\n", dim("sl.registerFactory(() => "+pascal+"Bloc(sl()))"))
+			step++
+		}
+	}
+	if _, hasRepo := roleSet["repository_impl"]; hasRepo {
+		fmt.Fprintf(cmd.OutOrStdout(), "  %d. Bind repository in service locator:\n", step)
+		fmt.Fprintf(cmd.OutOrStdout(), "       %s\n", dim("sl.registerLazySingleton<"+pascal+repoSuffix+">(() => "+pascal+repoSuffix+"Impl(sl()))"))
+		step++
+	}
+	if _, hasScreen := roleSet["screen"]; hasScreen {
+		fmt.Fprintf(cmd.OutOrStdout(), "  %d. Add route in router:\n", step)
+		fmt.Fprintf(cmd.OutOrStdout(), "       %s\n", dim("GoRoute(path: '/"+snake+"', builder: (_, __) => BlocProvider(create: (_) => sl<"+pascal+"Bloc>(), child: const "+pascal+"Screen()))"))
+		step++
+	}
+	if _, hasRepo := roleSet["repository_impl"]; hasRepo {
+		fmt.Fprintf(cmd.OutOrStdout(), "  %d. Implement fetch() in %sRepositoryImpl\n", step, pascal)
+		step++
+	}
+	_ = step
 }

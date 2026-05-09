@@ -42,9 +42,13 @@ type TemplateContext struct {
 	ServiceSuffix    string // Go
 	CommonImports    []string
 	BlocImport       string
+	UsecaseImport    string
 	RepositoryImport string
 	RequestImport    string
 	ResponseImport   string
+	BlocBaseClass    string // e.g. "BaseBlocScreen" when derived from like anatomy
+	ScreenBaseClass  string // e.g. "BaseStatefulWidget" when derived from like anatomy
+	ScreenStateBase  string // e.g. "BaseState" when derived from like anatomy
 }
 
 // GeneratedFile pairs an output path with its rendered content.
@@ -94,6 +98,7 @@ func (g *TemplateGenerator) Generate(featureName, templateName string, conv *mod
 // GenerateWithOptions renders selected templates in templateName for the given feature and conventions.
 func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string, conv *models.Convention, opts GenerateOptions) ([]GeneratedFile, error) {
 	ctx := buildContext(featureName, conv)
+	ctx = ctx.withBaseClassesFrom(opts.LikeFeature)
 	conv = conventionWithLikeTarget(conv, ctx, opts)
 
 	pattern := filepath.Join(templateName, "*.tmpl")
@@ -662,8 +667,29 @@ func buildContext(featureName string, conv *models.Convention) TemplateContext {
 	}
 }
 
+func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) TemplateContext {
+	if like == nil {
+		return ctx
+	}
+	if a, ok := like.Anatomy["bloc"]; ok && len(a.BaseClasses) > 0 {
+		ctx.BlocBaseClass = a.BaseClasses[0]
+	}
+	if a, ok := like.Anatomy["screen"]; ok {
+		for _, base := range a.BaseClasses {
+			switch {
+			case strings.HasSuffix(base, "State"):
+				ctx.ScreenStateBase = base
+			default:
+				ctx.ScreenBaseClass = base
+			}
+		}
+	}
+	return ctx
+}
+
 func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Convention) TemplateContext {
 	ctx.BlocImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "bloc"))
+	ctx.UsecaseImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "usecase"))
 	ctx.RepositoryImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "repository"))
 	ctx.RequestImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "request"))
 	ctx.ResponseImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "response"))

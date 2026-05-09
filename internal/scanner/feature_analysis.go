@@ -267,9 +267,15 @@ func hasFeatureRoleFilesUnderInternalDirs(path string) bool {
 	return false
 }
 
+type featureFileCandidate struct {
+	rel   string
+	role  string
+	route string
+	depth int
+}
+
 func collectFeatureFiles(rootDir, featureDir string) (map[string]string, map[string]string) {
-	files := map[string]string{}
-	routes := map[string]string{}
+	var candidates []featureFileCandidate
 
 	_ = filepath.WalkDir(featureDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -287,7 +293,6 @@ func collectFeatureFiles(rootDir, featureDir string) (map[string]string, map[str
 		if isGeneratedSourceFile(path) {
 			return nil
 		}
-
 		role := roleForFeaturePath(featureDir, path)
 		if role == "" {
 			return nil
@@ -300,12 +305,32 @@ func collectFeatureFiles(rootDir, featureDir string) (map[string]string, map[str
 		if err != nil || route == "." {
 			route = ""
 		}
-		role = uniqueFeatureRole(role, filepath.ToSlash(route), files)
-		files[role] = filepath.ToSlash(rel)
-		routes[role] = filepath.ToSlash(route)
+		depth := strings.Count(filepath.ToSlash(rel), "/")
+		candidates = append(candidates, featureFileCandidate{
+			rel:   filepath.ToSlash(rel),
+			role:  role,
+			route: filepath.ToSlash(route),
+			depth: depth,
+		})
 		return nil
 	})
 
+	// Sort shallowest files first so primary roles (screen, bloc, etc.) go to
+	// files closest to the feature root, not nested subdirectory variants.
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].depth != candidates[j].depth {
+			return candidates[i].depth < candidates[j].depth
+		}
+		return candidates[i].rel < candidates[j].rel
+	})
+
+	files := map[string]string{}
+	routes := map[string]string{}
+	for _, c := range candidates {
+		role := uniqueFeatureRole(c.role, c.route, files)
+		files[role] = c.rel
+		routes[role] = c.route
+	}
 	return files, routes
 }
 

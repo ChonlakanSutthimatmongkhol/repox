@@ -3,14 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '{{.BlocImport}}';
 
-class {{.PascalName}}{{.ScreenSuffix}} extends StatefulWidget {
+class {{.PascalName}}{{.ScreenSuffix}} extends {{if .ScreenBaseClass}}{{.ScreenBaseClass}}{{else}}StatefulWidget{{end}} {
   const {{.PascalName}}{{.ScreenSuffix}}({super.key});
 
   @override
-  State<{{.PascalName}}{{.ScreenSuffix}}> createState() => _{{.PascalName}}{{.ScreenSuffix}}State();
+  {{if .ScreenStateBase}}{{.ScreenStateBase}}<{{.PascalName}}{{.ScreenSuffix}}>{{else}}State<{{.PascalName}}{{.ScreenSuffix}}>{{end}} createState() => _{{.PascalName}}{{.ScreenSuffix}}State();
 }
 
-class _{{.PascalName}}{{.ScreenSuffix}}State extends State<{{.PascalName}}{{.ScreenSuffix}}> {
+class _{{.PascalName}}{{.ScreenSuffix}}State extends {{if .ScreenStateBase}}{{.ScreenStateBase}}<{{.PascalName}}{{.ScreenSuffix}}>{{else}}State<{{.PascalName}}{{.ScreenSuffix}}>{{end}} {
   @override
   void initState() {
     super.initState();
