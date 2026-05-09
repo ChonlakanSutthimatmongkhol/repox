@@ -6,7 +6,7 @@
 
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Version](https://img.shields.io/badge/Version-v0.3.0-blue?style=flat)
+![Version](https://img.shields.io/badge/Version-v1.0.0-blue?style=flat)
 
 ---
 
@@ -30,9 +30,11 @@ repox generate feature watchlist --dry-run
 # 5. Find similar existing features before generating
 repox generate feature watchlist --with-examples
 
-# Coming soon
-repox generate feature watchlist --ai    # AI-assisted generation
+repox generate feature watchlist --ai    # AI-assisted generation (Claude)
+repox generate feature watchlist --ai --opus  # Use Claude Opus
 repox learn                              # Learn from your edits
+repox learn --list                       # Show stored lessons
+repox --mcp                              # Start as MCP server (Claude Code / Copilot / Cursor)
 ```
 
 ---
@@ -213,7 +215,22 @@ repox/
 │   │   ├── feature_indexer.go      # Walk repo and index features
 │   │   ├── similarity.go           # Score similarity between features
 │   │   └── retriever_test.go       # Tests
-│   ├── learner/                    # Self-learning loop (v0.5.0)
+│   ├── learner/                    #                     ✅ v0.5.0
+│   │   ├── learner.go              # Learner interface
+│   │   ├── diff_reader.go          # Compare snapshots vs current files
+│   │   ├── lesson_extractor.go     # AI-powered lesson extraction
+│   │   └── learner_test.go         # Tests
+│   ├── ai/                         #                     ✅ v0.4.0
+│   │   ├── client.go               # Client + Caller interfaces
+│   │   ├── anthropic.go            # Anthropic API (raw HTTP)
+│   │   ├── prompt_builder.go       # Prompt assembly with token budget
+│   │   ├── response_parser.go      # JSON response parser
+│   │   └── ai_test.go              # Tests
+│   ├── mcp/                        #                     ✅ v1.0.0
+│   │   ├── server.go               # MCP server setup (mark3labs/mcp-go)
+│   │   ├── tools.go                # Tool schemas
+│   │   ├── handlers.go             # Tool handlers
+│   │   └── mcp_test.go             # Tests
 │   ├── ai/                         # AI generation (v0.4.0)
 │   ├── config/
 │   │   └── loader.go               # Generic Load[T]/Save[T], defaults
@@ -424,14 +441,13 @@ Similar features found:
 - Confidence scoring & dedup
 - Inject lessons into next generation prompt
 
-### v1.0.0 — MCP Server Mode
+### ✅ v1.0.0 — MCP Server Mode _(released 2026-05-09)_
 
 > Goal: AI tools เรียก Repox ผ่าน MCP ได้ตรง ไม่ต้องผ่าน CLI
 
-- MCP server implementation
-- Tools: `repox.scan`, `repox.generate`, `repox.learn`, `repox.explain_convention`
-- Chain with ctx-saver MCP
-- Works with: Claude Code, Copilot, Cursor
+- ✅ MCP server via `repox --mcp` (stdio JSON-RPC)
+- ✅ 5 tools: `repox_scan`, `repox_generate`, `repox_find_similar`, `repox_learn`, `repox_explain_convention`
+- ✅ Works with: Claude Code, GitHub Copilot, Cursor
 
 ### v1.x — Future
 
@@ -444,15 +460,31 @@ Similar features found:
 
 ---
 
-## 🔌 MCP Integration (Future)
+## 🔌 MCP Integration
 
+Add to your MCP config (`.claude/mcp.json` or Cursor settings):
+
+```json
+{
+  "mcpServers": {
+    "repox": {
+      "command": "repox",
+      "args": ["--mcp"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
 ```
-repox.scan                  → Scan repo conventions
-repox.generate              → Generate feature scaffold
-repox.find_similar          → Find similar existing features
-repox.learn                 → Learn from git diff
-repox.explain_convention    → Explain repo conventions
-```
+
+Available tools:
+
+| Tool | Description |
+|---|---|
+| `repox_scan` | Scan repo, detect conventions, index features |
+| `repox_generate` | Generate feature scaffold (AI or template mode) |
+| `repox_find_similar` | Find structurally similar existing features |
+| `repox_learn` | Extract lessons from developer edits |
+| `repox_explain_convention` | Explain repo conventions in natural language |
 
 Works with: **Claude Code** · **GitHub Copilot** · **Cursor**
 

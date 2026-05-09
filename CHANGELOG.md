@@ -6,6 +6,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.0] — 2026-05-09
+
+### Added
+
+- **`repox --mcp`** — starts Repox as an MCP (Model Context Protocol) stdio server; works with Claude Code, GitHub Copilot, and Cursor
+- **`internal/mcp` package** — server setup, tool definitions, and handlers using `github.com/mark3labs/mcp-go`
+- **5 MCP tools exposed:**
+  - `repox_scan` — scan repo, detect conventions, index features
+  - `repox_generate` — generate feature scaffold (supports `use_ai`, `use_examples`, `force`, `dry_run`)
+  - `repox_find_similar` — find structurally similar existing features
+  - `repox_learn` — delegates to CLI with usage hint
+  - `repox_explain_convention` — returns full convention summary in natural language
+- All existing CLI commands (`init`, `scan`, `generate`, `learn`) remain unchanged
+
+### Changed
+
+- Go module version bumped to 1.25.5 (required by mcp-go v0.52.0)
+- Version bumped to **1.0.0**
+
+---
+
+## [0.5.0] — 2026-05-09
+
+### Added
+
+- **`repox learn` command** — extracts reusable lessons from AI-generated vs developer-edited diffs
+  - Flags: `--from <gen_id>`, `--approve`, `--reject <id>`, `--list`, `--prune`, `--reset`
+- **`internal/learner` package** — `ReadDiffs`, `ExtractLessons`, `ParseExtractionJSON`
+- **Snapshot storage** — AI-mode generations copy file contents to `.repox/snapshots/<gen_id>/`
+- **Lesson deduplication** — word-overlap similarity prevents near-duplicate lessons
+- **Lesson injection** — approved lessons filtered by scope and confidence injected into next AI prompt
+- **`ai.Caller` interface** — lower-level `Call(system, user string) (string, error)` for custom prompts
+- **Updated `models.Lesson`** — full struct: `ID`, `Scope`, `Lesson`, `Confidence`, `Approved`, `Source`
+- **Updated `models.Generation`** — added `Mode` ("template"/"ai") and `SnapshotDir` fields
+
+---
+
+## [0.4.0] — 2026-05-09
+
+### Added
+
+- **`repox generate --ai`** — sends conventions + examples + lessons to Claude API and writes AI-generated files
+- **`repox generate --opus`** — uses `claude-opus-4-7` instead of default Sonnet
+- **`internal/ai` package** — `Client`/`Caller` interfaces, `AnthropicClient` (raw HTTP, no SDK), `BuildSystemPrompt`, `BuildUserPrompt`, `ParseResponse`
+- **Token budget control** — examples capped at 3 features × 2 files × 100 lines; total budget 30K tokens
+- **Generation logging** — appended to `.repox/generations.json` after every generate (template or AI)
+- **`dart format` integration** — runs automatically after writing `.dart` files; skipped if dart not installed
+- **Error messages** — clear guidance for missing API key, API errors, invalid JSON response
+
+---
+
 ## [0.3.0] — 2026-05-09
 
 ### Added
@@ -73,6 +124,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+[1.0.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.5.0...v1.0.0
+[0.5.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/releases/tag/v0.1.0
