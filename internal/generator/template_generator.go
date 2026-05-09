@@ -25,6 +25,8 @@ type TemplateContext struct {
 	RepositorySuffix string
 	UsecaseSuffix    string
 	CommonImports    []string
+	FeaturePattern   string // "clean_architecture", "grouped", or "flat"
+	PackageName      string // detected package name like "investment_module"
 }
 
 // GeneratedFile pairs an output path with its rendered content.
@@ -125,6 +127,45 @@ func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) s
 }
 
 func buildContext(featureName string, conv *models.Convention) TemplateContext {
+	// Extract project package name from common imports
+	// Look for packages that appear to be project-specific (not flutter/dart ecosystem packages)
+	packageName := ""
+	if len(conv.CommonImports) > 0 {
+		// Count packages, preferring ones that are not standard packages
+		pkgCounts := make(map[string]int)
+		for _, imp := range conv.CommonImports {
+			parts := strings.Split(imp, "/")
+			if len(parts) > 0 {
+				pkgParts := strings.Split(parts[0], ":")
+				if len(pkgParts) > 1 {
+					pkg := pkgParts[1]
+					// Prefer non-standard packages
+					if !isStandardPackage(pkg) {
+						pkgCounts[pkg]++
+					}
+				}
+			}
+		}
+		// Find most common package
+		maxCount := 0
+		for pkg, count := range pkgCounts {
+			if count > maxCount {
+				maxCount = count
+				packageName = pkg
+			}
+		}
+		// If no custom package found, use first package
+		if packageName == "" && len(conv.CommonImports) > 0 {
+			parts := strings.Split(conv.CommonImports[0], "/")
+			if len(parts) > 0 {
+				pkgParts := strings.Split(parts[0], ":")
+				if len(pkgParts) > 1 {
+					packageName = pkgParts[1]
+				}
+			}
+		}
+	}
+
 	return TemplateContext{
 		FeatureName:      featureName,
 		PascalName:       ToPascalCase(featureName),
@@ -137,5 +178,23 @@ func buildContext(featureName string, conv *models.Convention) TemplateContext {
 		RepositorySuffix: conv.Naming.RepositorySuffix,
 		UsecaseSuffix:    conv.Naming.UsecaseSuffix,
 		CommonImports:    conv.CommonImports,
+		FeaturePattern:   conv.FeatureStructure,
+		PackageName:      packageName,
 	}
+}
+
+// isStandardPackage checks if a package is from the standard Dart/Flutter ecosystem
+func isStandardPackage(pkg string) bool {
+	standardPkgs := map[string]bool{
+		"flutter":        true,
+		"dart":           true,
+		"flutter_bloc":   true,
+		"bloc":           true,
+		"json_annotation": true,
+		"freezed":        true,
+		"go_router":      true,
+		"provider":       true,
+		"get_it":         true,
+	}
+	return standardPkgs[pkg]
 }

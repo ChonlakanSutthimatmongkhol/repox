@@ -1,5 +1,10 @@
-import '../../data/models/{{.SnakeName}}_request.dart';
-import '../../data/models/{{.SnakeName}}_response.dart';
+{{if eq .FeaturePattern "clean_architecture" -}}
+import 'package:{{.PackageName}}/features/{{.SnakeName}}/data/models/{{.SnakeName}}_request.dart';
+import 'package:{{.PackageName}}/features/{{.SnakeName}}/data/models/{{.SnakeName}}_response.dart';
+{{- else -}}
+import 'package:{{.PackageName}}/features/{{.SnakeName}}/{{.SnakeName}}_request.dart';
+import 'package:{{.PackageName}}/features/{{.SnakeName}}/{{.SnakeName}}_response.dart';
+{{- end}}
 
 abstract class {{.PascalName}}{{.RepositorySuffix}} {
   Future<{{.PascalName}}Response> fetch({{.PascalName}}Request request);

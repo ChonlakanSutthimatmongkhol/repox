@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../presentation/{{.SnakeName}}_bloc.dart';
+import 'package:{{.PackageName}}/features/{{.SnakeName}}/{{if eq .FeaturePattern "clean_architecture"}}presentation/{{end}}{{.SnakeName}}_bloc.dart';
 
 class {{.PascalName}}{{.ScreenSuffix}} extends StatefulWidget {
   const {{.PascalName}}{{.ScreenSuffix}}({super.key});

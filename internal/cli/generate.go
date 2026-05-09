@@ -66,8 +66,8 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generate: load conventions: %w", err)
 	}
 
-	// Use recommended pattern from features analysis if feature structure not explicitly set
-	if conv.FeatureStructure == "" && conv.FeaturesAnalysis.RecommendedPattern != "" {
+	// Use recommended pattern from features analysis (most accurate)
+	if conv.FeaturesAnalysis.RecommendedPattern != "" {
 		conv.FeatureStructure = conv.FeaturesAnalysis.RecommendedPattern
 	}
 
