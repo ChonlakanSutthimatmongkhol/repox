@@ -24,4 +24,7 @@ class {{.PascalName}}{{.BlocSuffix}} extends {{if .BlocBaseClass}}{{.BlocBaseCla
     // TODO: implement
     emit(const {{.PascalName}}Loaded());
   }
-}
+{{range .BlocAbstractStubs}}
+  @override
+  {{.}}
+{{end}}}

@@ -48,6 +48,7 @@ func analyzeFileAnatomy(role, relPath, fullPath string) models.FileAnatomy {
 		item.Imports, _ = parseDartImports(fullPath)
 		item.ClassNames, item.BaseClasses, item.Mixins = parseDartClasses(content)
 		item.Methods = parseDartMethods(content)
+		item.AbstractOverrides = parseDartAbstractOverrides(content)
 		item.ConstructorDeps = parseDependencyTypes(content)
 	case ".go":
 		item.Imports, _ = parseGoImports(fullPath)
@@ -104,6 +105,78 @@ func parseDartMethods(content string) []string {
 		methods = append(methods, match[1])
 	}
 	return dedup(methods)
+}
+
+// parseDartAbstractOverrides extracts the method signatures of public @override methods.
+// These represent abstract methods from base classes/mixins that subclasses must implement.
+// Returns signatures like "ReturnType methodName(params)" for use as stub generation hints.
+func parseDartAbstractOverrides(content string) []string {
+	var sigs []string
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "@override" {
+			continue
+		}
+		// Collect lines starting from the method signature until we close the param list
+		var accumulated strings.Builder
+		depth := 0
+		started := false
+		isPublicMethod := false
+		for j := i + 1; j < len(lines) && j <= i+10; j++ {
+			candidate := strings.TrimSpace(lines[j])
+			if candidate == "" || strings.HasPrefix(candidate, "@") || strings.HasPrefix(candidate, "//") {
+				continue
+			}
+			if !started {
+				match := dartMethodRe.FindStringSubmatch(candidate)
+				if len(match) < 2 || match[1] == "" || strings.HasPrefix(match[1], "_") {
+					break
+				}
+				isPublicMethod = true
+				started = true
+			}
+			accumulated.WriteString(candidate + " ")
+			for _, ch := range candidate {
+				if ch == '(' {
+					depth++
+				} else if ch == ')' {
+					depth--
+				}
+			}
+			// Once all parens are balanced and we've started, signature is complete
+			if started && depth <= 0 {
+				break
+			}
+		}
+		if !isPublicMethod {
+			continue
+		}
+		sig := strings.TrimSpace(accumulated.String())
+		// Strip everything after the closing paren (body brace, arrow, async keyword)
+		if idx := balancedParenEnd(sig); idx >= 0 && idx < len(sig) {
+			sig = strings.TrimSpace(sig[:idx+1])
+		}
+		if sig != "" {
+			sigs = append(sigs, sig)
+		}
+	}
+	return dedup(sigs)
+}
+
+// balancedParenEnd returns the index of the closing ')' that matches the first '('.
+func balancedParenEnd(s string) int {
+	depth := 0
+	for i, ch := range s {
+		if ch == '(' {
+			depth++
+		} else if ch == ')' {
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 func parseGoTypes(content string) []string {

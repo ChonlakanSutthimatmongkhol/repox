@@ -67,6 +67,7 @@ type FileAnatomy struct {
 	BaseClasses         []string `json:"base_classes,omitempty"`
 	Mixins              []string `json:"mixins,omitempty"`
 	Methods             []string `json:"methods,omitempty"`
+	AbstractOverrides   []string `json:"abstract_overrides,omitempty"` // "@override" public method signatures
 	ConstructorDeps     []string `json:"constructor_deps,omitempty"`
 	Imports             []string `json:"imports,omitempty"`
 	Capabilities        []string `json:"capabilities,omitempty"`

@@ -46,10 +46,11 @@ type TemplateContext struct {
 	RepositoryImport string
 	RequestImport    string
 	ResponseImport   string
-	BlocBaseClass    string   // e.g. "BaseBlocScreen" when derived from like anatomy
-	BlocBaseImports  []string // imports required by BlocBaseClass
-	ScreenBaseClass  string   // e.g. "BaseStatefulWidget" when derived from like anatomy
-	ScreenStateBase  string   // e.g. "BaseState" when derived from like anatomy
+	BlocBaseClass     string   // e.g. "BaseBlocScreen" when derived from like anatomy
+	BlocBaseImports   []string // imports required by BlocBaseClass
+	BlocAbstractStubs []string // "@override Sig => throw UnimplementedError();" stubs
+	ScreenBaseClass   string   // e.g. "BaseStatefulWidget" when derived from like anatomy
+	ScreenStateBase   string   // e.g. "BaseState" when derived from like anatomy
 	ScreenBaseImports []string // imports required by ScreenBaseClass
 }
 
@@ -651,7 +652,8 @@ func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) Tem
 	}
 	if a, ok := like.Anatomy["bloc"]; ok && len(a.BaseClasses) > 0 {
 		ctx.BlocBaseClass = a.BaseClasses[0]
-		ctx.BlocBaseImports = baseClassImports(a.Imports, a.BaseClasses)
+		ctx.BlocBaseImports = append(baseClassImports(a.Imports, a.BaseClasses), abstractStubImports(a.Imports)...)
+		ctx.BlocAbstractStubs = buildAbstractStubs(a.AbstractOverrides)
 	}
 	if a, ok := like.Anatomy["screen"]; ok {
 		for _, base := range a.BaseClasses {
@@ -672,18 +674,45 @@ func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) Tem
 func baseClassImports(imports []string, baseClasses []string) []string {
 	var result []string
 	for _, imp := range imports {
-		// Always include core/base imports — these are framework-level base classes
+		// Always include core/base imports — framework-level base classes
 		if strings.Contains(imp, "/core/base/") {
 			result = append(result, imp)
 			continue
 		}
-		// Also include if the import filename matches any base class (case-insensitive snake)
+		// Include imports whose filename matches any base class name
 		impBase := strings.ToLower(strings.TrimSuffix(filepath.Base(imp), ".dart"))
 		for _, cls := range baseClasses {
 			if strings.Contains(impBase, strings.ToLower(ToSnakeCase(cls))) {
 				result = append(result, imp)
 				break
 			}
+		}
+	}
+	return result
+}
+
+// buildAbstractStubs turns scanned "@override" method signatures into
+// "  @override\n  Sig => throw UnimplementedError();" stub strings.
+func buildAbstractStubs(overrides []string) []string {
+	stubs := make([]string, 0, len(overrides))
+	for _, sig := range overrides {
+		stubs = append(stubs, sig+" => throw UnimplementedError();")
+	}
+	return stubs
+}
+
+// abstractStubImports returns imports from the anatomy that are needed to
+// satisfy parameter/return types in abstract override stubs but are not
+// already in core/base (e.g. account_status_model, failure_response).
+func abstractStubImports(imports []string) []string {
+	var result []string
+	for _, imp := range imports {
+		base := strings.ToLower(filepath.Base(imp))
+		if strings.Contains(base, "account_status_model") ||
+			strings.Contains(base, "failure_response") ||
+			strings.Contains(base, "failure_response") ||
+			strings.Contains(base, "account_status_helper") {
+			result = append(result, imp)
 		}
 	}
 	return result
