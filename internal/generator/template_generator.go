@@ -46,9 +46,11 @@ type TemplateContext struct {
 	RepositoryImport string
 	RequestImport    string
 	ResponseImport   string
-	BlocBaseClass    string // e.g. "BaseBlocScreen" when derived from like anatomy
-	ScreenBaseClass  string // e.g. "BaseStatefulWidget" when derived from like anatomy
-	ScreenStateBase  string // e.g. "BaseState" when derived from like anatomy
+	BlocBaseClass    string   // e.g. "BaseBlocScreen" when derived from like anatomy
+	BlocBaseImports  []string // imports required by BlocBaseClass
+	ScreenBaseClass  string   // e.g. "BaseStatefulWidget" when derived from like anatomy
+	ScreenStateBase  string   // e.g. "BaseState" when derived from like anatomy
+	ScreenBaseImports []string // imports required by ScreenBaseClass
 }
 
 // GeneratedFile pairs an output path with its rendered content.
@@ -649,6 +651,7 @@ func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) Tem
 	}
 	if a, ok := like.Anatomy["bloc"]; ok && len(a.BaseClasses) > 0 {
 		ctx.BlocBaseClass = a.BaseClasses[0]
+		ctx.BlocBaseImports = baseClassImports(a.Imports, a.BaseClasses)
 	}
 	if a, ok := like.Anatomy["screen"]; ok {
 		for _, base := range a.BaseClasses {
@@ -659,8 +662,31 @@ func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) Tem
 				ctx.ScreenBaseClass = base
 			}
 		}
+		ctx.ScreenBaseImports = baseClassImports(a.Imports, a.BaseClasses)
 	}
 	return ctx
+}
+
+// baseClassImports filters imports to those that likely provide the given base classes.
+// It keeps imports from "core/base" paths and any import whose filename matches a base class name.
+func baseClassImports(imports []string, baseClasses []string) []string {
+	var result []string
+	for _, imp := range imports {
+		// Always include core/base imports — these are framework-level base classes
+		if strings.Contains(imp, "/core/base/") {
+			result = append(result, imp)
+			continue
+		}
+		// Also include if the import filename matches any base class (case-insensitive snake)
+		impBase := strings.ToLower(strings.TrimSuffix(filepath.Base(imp), ".dart"))
+		for _, cls := range baseClasses {
+			if strings.Contains(impBase, strings.ToLower(ToSnakeCase(cls))) {
+				result = append(result, imp)
+				break
+			}
+		}
+	}
+	return result
 }
 
 func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Convention) TemplateContext {
