@@ -245,7 +245,7 @@ func TestFlutterScanner_Scan(t *testing.T) {
 
 	assert.Equal(t, "flutter", conv.ProjectType)
 	assert.Equal(t, "lib/features", conv.FeatureRoot)
-	assert.Equal(t, "clean_architecture", conv.FeatureStructure)
+	assert.Equal(t, "grouped", conv.FeatureStructure)
 	assert.Equal(t, "test/features", conv.TestRoot)
 	assert.Equal(t, "flutter_bloc", conv.StateManagement)
 	assert.Equal(t, "go_router", conv.Routing.Type)
@@ -253,6 +253,10 @@ func TestFlutterScanner_Scan(t *testing.T) {
 	assert.Equal(t, "Screen", conv.Naming.ScreenSuffix)
 	assert.Equal(t, "Bloc", conv.Naming.BlocSuffix)
 	assert.Equal(t, "Repository", conv.Naming.RepositorySuffix)
+	require.Len(t, conv.FeaturesAnalysis.Features, 2)
+	assert.Equal(t, 1, conv.FeaturesAnalysis.PatternDistribution["clean_architecture"].Count)
+	assert.Equal(t, 1, conv.FeaturesAnalysis.PatternDistribution["grouped"].Count)
+	assert.Equal(t, "grouped", conv.FeaturesAnalysis.RecommendedPattern)
 }
 
 func TestFlutterScanner_EmptyRepo(t *testing.T) {

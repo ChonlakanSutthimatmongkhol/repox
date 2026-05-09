@@ -27,6 +27,9 @@ func toolGenerate() mcp.Tool {
 		mcp.WithBoolean("dry_run",
 			mcp.Description("Preview files without writing"),
 		),
+		mcp.WithString("pattern",
+			mcp.Description("Override feature pattern (flat, grouped, clean_architecture)"),
+		),
 	)
 }
 

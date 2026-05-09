@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -80,6 +80,9 @@ func saveScanResult(cmd *cobra.Command, conv *models.Convention) error {
 		if conv.FeatureRoot != "" {
 			cfg.FeatureRoot = conv.FeatureRoot
 		}
+		if conv.TestRoot != "" {
+			cfg.TestRoot = conv.TestRoot
+		}
 		_ = config.Save(config.RepoxPath("config.json"), cfg)
 	}
 
@@ -113,110 +116,42 @@ func printScanSummary(cmd *cobra.Command, conv *models.Convention) {
 	fmt.Fprintf(out, "    State suffix:    %s\n", conv.Naming.StateSuffix)
 	fmt.Fprintf(out, "  Routing:           %s (%s)\n", conv.Routing.Type, conv.Routing.RouteFile)
 	fmt.Fprintf(out, "  Common imports:    %d detected\n", len(conv.CommonImports))
-
-	// Analyze patterns in existing features
-	cwd, err := os.Getwd()
-	if err == nil && conv.FeatureRoot != "" {
-		featureRootPath := filepath.Join(cwd, conv.FeatureRoot)
-		patterns := analyzeFeaturePatterns(featureRootPath)
-		if len(patterns) > 0 {
-			printPatternAnalysis(out, patterns)
-		}
-	}
-}
-
-// analyzeFeaturePatterns scans all features and returns pattern distribution
-func analyzeFeaturePatterns(featureRootPath string) map[string]int {
-	patterns := make(map[string]int)
-
-	entries, err := os.ReadDir(featureRootPath)
-	if err != nil {
-		return patterns
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		featurePath := filepath.Join(featureRootPath, entry.Name())
-		pattern := detectFeatureStructure(featurePath)
-		patterns[pattern]++
-	}
-
-	return patterns
-}
-
-// detectFeatureStructure checks a feature directory structure
-func detectFeatureStructure(featurePath string) string {
-	entries, err := os.ReadDir(featurePath)
-	if err != nil {
-		return "flat"
-	}
-
-	hasPresentation := false
-	hasDomain := false
-	hasData := false
-	hasBloc := false
-	hasScreen := false
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		switch entry.Name() {
-		case "presentation":
-			hasPresentation = true
-		case "domain":
-			hasDomain = true
-		case "data":
-			hasData = true
-		case "bloc":
-			hasBloc = true
-		case "screen":
-			hasScreen = true
-		}
-	}
-
-	if hasPresentation && (hasDomain || hasData) {
-		return "clean_architecture"
-	}
-	if hasBloc || hasScreen {
-		return "grouped"
-	}
-	return "flat"
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Discover:")
+	fmt.Fprintf(out, "  Feature root:       %s\n", conv.FeatureRoot)
+	fmt.Fprintf(out, "  Features found:     %d\n", len(conv.FeaturesAnalysis.Features))
+	printPatternAnalysis(out, conv.FeaturesAnalysis)
 }
 
 // printPatternAnalysis displays pattern distribution and recommendations
-func printPatternAnalysis(out io.Writer, patterns map[string]int) {
-	if len(patterns) == 0 {
+func printPatternAnalysis(out io.Writer, analysis models.FeaturesAnalysis) {
+	if len(analysis.Features) == 0 {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Pattern Analysis:")
+		fmt.Fprintln(out, "  Total features: 0")
+		fmt.Fprintln(out, "  No feature folders found to analyze.")
+		fmt.Fprintln(out, "\nNext step:")
+		fmt.Fprintln(out, "  repox generate feature <name>")
 		return
-	}
-
-	total := 0
-	for _, count := range patterns {
-		total += count
 	}
 
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Pattern Analysis:")
+	fmt.Fprintf(out, "  Total features: %d\n", len(analysis.Features))
 
-	// Find recommended pattern (most frequent)
-	var recommended string
-	maxCount := 0
-	for pattern, count := range patterns {
-		percentage := (count * 100) / total
-		if percentage > 0 {
-			fmt.Fprintf(out, "  %s: %d features (%d%%)\n", pattern, count, percentage)
-		}
-		if count > maxCount {
-			maxCount = count
-			recommended = pattern
-		}
+	patterns := make([]string, 0, len(analysis.PatternDistribution))
+	for pattern := range analysis.PatternDistribution {
+		patterns = append(patterns, pattern)
+	}
+	sort.Strings(patterns)
+	fmt.Fprintln(out, "  Pattern distribution:")
+	for _, pattern := range patterns {
+		item := analysis.PatternDistribution[pattern]
+		fmt.Fprintf(out, "    %s: %d features (%.1f%%)\n", pattern, item.Count, item.Percentage)
 	}
 
-	fmt.Fprintf(out, "\nRecommended pattern: %s\n", recommended)
-	fmt.Fprintln(out, "\nTo generate a new feature, run:")
-	fmt.Fprintln(out, "  repox generate feature <feature_name>")
+	fmt.Fprintf(out, "  Recommended pattern: %s\n", analysis.RecommendedPattern)
+	fmt.Fprintf(out, "  Latest pattern:      %s\n", analysis.LatestPattern)
+	fmt.Fprintln(out, "\nNext step:")
+	fmt.Fprintln(out, "  repox generate feature <name>")
 }

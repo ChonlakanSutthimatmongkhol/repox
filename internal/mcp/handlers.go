@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -57,8 +58,8 @@ func handleScan(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult
 		_ = config.Save(config.RepoxPath("examples.json"), examples)
 	}
 
-	result := fmt.Sprintf("Scanned repository:\n  Project type: %s\n  Feature root: %s\n  Structure: %s\n  State management: %s\n  Routing: %s\n  Indexed features: %d\n\nConventions saved to .repox/conventions.json",
-		conv.ProjectType, conv.FeatureRoot, conv.FeatureStructure, conv.StateManagement, conv.Routing.Type, len(examples))
+	result := fmt.Sprintf("Scanned repository:\n  Project type: %s\n  Feature root: %s\n  Structure: %s\n  State management: %s\n  Routing: %s\n  Indexed features: %d\n%s\n\nConventions saved to .repox/conventions.json",
+		conv.ProjectType, conv.FeatureRoot, conv.FeatureStructure, conv.StateManagement, conv.Routing.Type, len(examples), formatPatternAnalysis(conv.FeaturesAnalysis))
 	return callResult(result)
 }
 
@@ -74,6 +75,7 @@ func handleGenerate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	}
 	force := optionalBool(args, "force")
 	dryRun := optionalBool(args, "dry_run")
+	patternOverride := optionalString(args, "pattern")
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -85,6 +87,9 @@ func handleGenerate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	}
 	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
 	if err != nil {
+		return callError(err)
+	}
+	if err := applyPatternOverride(&conv, patternOverride); err != nil {
 		return callError(err)
 	}
 
@@ -137,6 +142,50 @@ func handleGenerate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 
 	_ = writtenAbs // available for formatter if needed
 	return callResult(fmt.Sprintf("%d created, %d skipped\n\n%s", written, skipped, strings.Join(lines, "\n")))
+}
+
+func applyPatternOverride(conv *models.Convention, override string) error {
+	pattern := conv.FeatureStructure
+	if conv.FeaturesAnalysis.RecommendedPattern != "" {
+		pattern = conv.FeaturesAnalysis.RecommendedPattern
+	}
+	if override != "" {
+		pattern = override
+	}
+	if pattern == "" {
+		pattern = "flat"
+	}
+	switch pattern {
+	case "flat", "grouped", "clean_architecture":
+		conv.FeatureStructure = pattern
+		return nil
+	default:
+		return fmt.Errorf("unsupported pattern %q (use flat, grouped, or clean_architecture)", pattern)
+	}
+}
+
+func formatPatternAnalysis(analysis models.FeaturesAnalysis) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n\nDiscover:\n  Features found: %d\n\nPattern Analysis:\n  Total features: %d\n", len(analysis.Features), len(analysis.Features))
+	if len(analysis.Features) == 0 {
+		fmt.Fprintln(&b, "  No feature folders found to analyze.")
+		fmt.Fprintln(&b, "\nNext step:\n  repox generate feature <name>")
+		return b.String()
+	}
+	fmt.Fprintln(&b, "  Pattern distribution:")
+	patterns := make([]string, 0, len(analysis.PatternDistribution))
+	for pattern := range analysis.PatternDistribution {
+		patterns = append(patterns, pattern)
+	}
+	sort.Strings(patterns)
+	for _, pattern := range patterns {
+		item := analysis.PatternDistribution[pattern]
+		fmt.Fprintf(&b, "    %s: %d features (%.1f%%)\n", pattern, item.Count, item.Percentage)
+	}
+	fmt.Fprintf(&b, "  Recommended pattern: %s\n", analysis.RecommendedPattern)
+	fmt.Fprintf(&b, "  Latest pattern:      %s\n", analysis.LatestPattern)
+	fmt.Fprintln(&b, "\nNext step:\n  repox generate feature <name>")
+	return b.String()
 }
 
 func saveSnapshotMCP(genID string, files []generator.GeneratedFile, baseDir string) string {

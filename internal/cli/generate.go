@@ -20,6 +20,7 @@ var (
 	generateForce        bool
 	generateDryRun       bool
 	generateTemplate     string
+	generatePattern      string
 	generateWithExamples bool
 )
 
@@ -39,6 +40,7 @@ func init() {
 	generateFeatureCmd.Flags().BoolVarP(&generateForce, "force", "f", false, "Overwrite existing files")
 	generateFeatureCmd.Flags().BoolVar(&generateDryRun, "dry-run", false, "Preview files without writing")
 	generateFeatureCmd.Flags().StringVarP(&generateTemplate, "template", "t", "", "Template to use (overrides config)")
+	generateFeatureCmd.Flags().StringVar(&generatePattern, "pattern", "", "Feature pattern to use (flat, grouped, clean_architecture)")
 	generateFeatureCmd.Flags().BoolVar(&generateWithExamples, "with-examples", false, "Find and show similar existing features before generating")
 	generateCmd.AddCommand(generateFeatureCmd)
 	rootCmd.AddCommand(generateCmd)
@@ -64,6 +66,9 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
 	if err != nil {
 		return fmt.Errorf("generate: load conventions: %w", err)
+	}
+	if err := applyGeneratePattern(&conv); err != nil {
+		return err
 	}
 
 	tmplName := cfg.DefaultTemplate
@@ -148,6 +153,33 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	})
 
 	return nil
+}
+
+func applyGeneratePattern(conv *models.Convention) error {
+	pattern := conv.FeatureStructure
+	if conv.FeaturesAnalysis.RecommendedPattern != "" {
+		pattern = conv.FeaturesAnalysis.RecommendedPattern
+	}
+	if generatePattern != "" {
+		pattern = generatePattern
+	}
+	if pattern == "" {
+		pattern = "flat"
+	}
+	if !validPattern(pattern) {
+		return fmt.Errorf("generate: unsupported pattern %q (use flat, grouped, or clean_architecture)", pattern)
+	}
+	conv.FeatureStructure = pattern
+	return nil
+}
+
+func validPattern(pattern string) bool {
+	switch pattern {
+	case "flat", "grouped", "clean_architecture":
+		return true
+	default:
+		return false
+	}
 }
 
 // saveSnapshot copies generated file contents to .repox/snapshots/<genID>/ for later diff.

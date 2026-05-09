@@ -77,6 +77,52 @@ func DefaultConventions() models.Convention {
 			"package:flutter/material.dart",
 			"package:flutter_bloc/flutter_bloc.dart",
 		},
+		PatternMappings: DefaultPatternMappings(),
+	}
+}
+
+// DefaultPatternMappings returns template routing for supported feature patterns.
+func DefaultPatternMappings() models.PatternMappings {
+	return models.PatternMappings{
+		"flat": {
+			FileRoutes: map[string]string{
+				"bloc":            "",
+				"event":           "",
+				"state":           "",
+				"screen":          "",
+				"repository":      "",
+				"repository_impl": "",
+				"request":         "",
+				"response":        "",
+				"usecase":         "",
+			},
+		},
+		"grouped": {
+			FileRoutes: map[string]string{
+				"bloc":            "bloc",
+				"event":           "bloc",
+				"state":           "bloc",
+				"screen":          "screen",
+				"repository":      "repository",
+				"repository_impl": "repository",
+				"request":         "models",
+				"response":        "models",
+				"usecase":         "usecase",
+			},
+		},
+		"clean_architecture": {
+			FileRoutes: map[string]string{
+				"bloc":            "presentation/bloc",
+				"event":           "presentation/bloc",
+				"state":           "presentation/bloc",
+				"screen":          "presentation/screen",
+				"repository":      "domain/repositories",
+				"repository_impl": "data/repositories",
+				"request":         "data/models",
+				"response":        "data/models",
+				"usecase":         "domain/usecases",
+			},
+		},
 	}
 }
 

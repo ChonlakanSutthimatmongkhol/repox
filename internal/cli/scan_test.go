@@ -72,6 +72,13 @@ func TestScanCommand_FlutterProject(t *testing.T) {
 	assert.Contains(t, out, "flutter")
 	assert.Contains(t, out, "flutter_bloc")
 	assert.Contains(t, out, "lib/features")
+	assert.Contains(t, out, "Pattern Analysis:")
+	assert.Contains(t, out, "Total features: 2")
+	assert.Contains(t, out, "clean_architecture: 1 features (50.0%)")
+	assert.Contains(t, out, "grouped: 1 features (50.0%)")
+	assert.Contains(t, out, "Recommended pattern: grouped")
+	assert.Contains(t, out, "Latest pattern:")
+	assert.Contains(t, out, "repox generate feature <name>")
 	assert.Contains(t, out, "Conventions saved")
 
 	// Verify conventions.json was written correctly
@@ -80,12 +87,19 @@ func TestScanCommand_FlutterProject(t *testing.T) {
 	assert.Equal(t, "flutter", conv.ProjectType)
 	assert.Equal(t, "flutter_bloc", conv.StateManagement)
 	assert.Equal(t, "lib/features", conv.FeatureRoot)
-	assert.Equal(t, "clean_architecture", conv.FeatureStructure)
+	assert.Equal(t, "grouped", conv.FeatureStructure)
 	assert.Equal(t, "test/features", conv.TestRoot)
 	assert.Equal(t, "Screen", conv.Naming.ScreenSuffix)
 	assert.Equal(t, "Bloc", conv.Naming.BlocSuffix)
 	assert.Equal(t, "go_router", conv.Routing.Type)
 	assert.Equal(t, "lib/router/app_router.dart", conv.Routing.RouteFile)
+	require.Len(t, conv.FeaturesAnalysis.Features, 2)
+	assert.Equal(t, 1, conv.FeaturesAnalysis.PatternDistribution["clean_architecture"].Count)
+	assert.Equal(t, 1, conv.FeaturesAnalysis.PatternDistribution["grouped"].Count)
+	assert.Equal(t, "grouped", conv.FeaturesAnalysis.RecommendedPattern)
+	assert.NotEmpty(t, conv.FeaturesAnalysis.LatestPattern)
+	assert.Contains(t, conv.PatternMappings, "flat")
+	assert.Contains(t, conv.PatternMappings, "clean_architecture")
 }
 
 func TestScanCommand_UpdatesConfigJSON(t *testing.T) {
@@ -206,6 +220,7 @@ func TestScanThenGenerate_UsesScannedConventions(t *testing.T) {
 	generateForce = false
 	generateDryRun = false
 	generateTemplate = ""
+	generatePattern = ""
 	buf := &bytes.Buffer{}
 	generateFeatureCmd.SetOut(buf)
 	err := runGenerateFeature(generateFeatureCmd, []string{"settings"})
@@ -213,7 +228,7 @@ func TestScanThenGenerate_UsesScannedConventions(t *testing.T) {
 	assert.Contains(t, buf.String(), "created")
 
 	// Verify files land under the scanned feature root
-	matches, err := filepath.Glob(filepath.Join(dir, "lib/features/settings/*.dart"))
+	matches, err := filepath.Glob(filepath.Join(dir, "lib/features/settings/bloc/*.dart"))
 	require.NoError(t, err)
-	assert.Greater(t, len(matches), 0, "expected dart files under lib/features/settings/")
+	assert.Greater(t, len(matches), 0, "expected dart files under grouped bloc folder")
 }

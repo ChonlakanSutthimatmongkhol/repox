@@ -25,6 +25,10 @@ type TemplateContext struct {
 	RepositorySuffix string
 	UsecaseSuffix    string
 	CommonImports    []string
+	BlocImport       string
+	RepositoryImport string
+	RequestImport    string
+	ResponseImport   string
 }
 
 // GeneratedFile pairs an output path with its rendered content.
@@ -58,11 +62,12 @@ func (g *TemplateGenerator) Generate(featureName, templateName string, conv *mod
 
 	var out []GeneratedFile
 	for _, entry := range entries {
-		content, err := g.renderFile(entry, ctx)
+		outPath := outputPath(entry, ctx, conv)
+		fileCtx := ctx.withImportsFor(outPath, conv)
+		content, err := g.renderFile(entry, fileCtx)
 		if err != nil {
 			return nil, err
 		}
-		outPath := outputPath(entry, ctx, conv)
 		out = append(out, GeneratedFile{Path: outPath, Content: content})
 	}
 	return out, nil
@@ -92,6 +97,7 @@ func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) s
 	base := filepath.Base(tmplPath)
 	// strip .tmpl extension
 	name := strings.TrimSuffix(base, ".tmpl")
+	kind := strings.TrimSuffix(name, filepath.Ext(name))
 	// prefix with snake feature name
 	outName := ctx.SnakeName + "_" + name
 
@@ -99,7 +105,7 @@ func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) s
 	if strings.Contains(name, "test") {
 		return filepath.Join(conv.TestRoot, ctx.SnakeName, outName)
 	}
-	return filepath.Join(conv.FeatureRoot, ctx.SnakeName, outName)
+	return filepath.Join(conv.FeatureRoot, ctx.SnakeName, routeForKind(conv, kind), outName)
 }
 
 func buildContext(featureName string, conv *models.Convention) TemplateContext {
@@ -116,4 +122,63 @@ func buildContext(featureName string, conv *models.Convention) TemplateContext {
 		UsecaseSuffix:    conv.Naming.UsecaseSuffix,
 		CommonImports:    conv.CommonImports,
 	}
+}
+
+func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Convention) TemplateContext {
+	ctx.BlocImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "bloc"))
+	ctx.RepositoryImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "repository"))
+	ctx.RequestImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "request"))
+	ctx.ResponseImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "response"))
+	return ctx
+}
+
+func featureFilePath(conv *models.Convention, ctx TemplateContext, kind string) string {
+	outName := ctx.SnakeName + "_" + kind + ".dart"
+	return filepath.Join(conv.FeatureRoot, ctx.SnakeName, routeForKind(conv, kind), outName)
+}
+
+func routeForKind(conv *models.Convention, kind string) string {
+	pattern := conv.FeatureStructure
+	if pattern == "" {
+		pattern = "flat"
+	}
+	if conv.PatternMappings != nil {
+		if mapping, ok := conv.PatternMappings[pattern]; ok && mapping.FileRoutes != nil {
+			return mapping.FileRoutes[kind]
+		}
+	}
+	return defaultRouteForKind(pattern, kind)
+}
+
+func defaultRouteForKind(pattern, kind string) string {
+	routes := map[string]map[string]string{
+		"flat": {
+			"bloc": "", "event": "", "state": "", "screen": "", "repository": "",
+			"repository_impl": "", "request": "", "response": "", "usecase": "",
+		},
+		"grouped": {
+			"bloc": "bloc", "event": "bloc", "state": "bloc", "screen": "screen",
+			"repository": "repository", "repository_impl": "repository",
+			"request": "models", "response": "models", "usecase": "usecase",
+		},
+		"clean_architecture": {
+			"bloc": "presentation/bloc", "event": "presentation/bloc",
+			"state": "presentation/bloc", "screen": "presentation/screen",
+			"repository": "domain/repositories", "repository_impl": "data/repositories",
+			"request": "data/models", "response": "data/models",
+			"usecase": "domain/usecases",
+		},
+	}
+	if byKind, ok := routes[pattern]; ok {
+		return byKind[kind]
+	}
+	return ""
+}
+
+func relativeDartImport(fromPath, toPath string) string {
+	rel, err := filepath.Rel(filepath.Dir(fromPath), toPath)
+	if err != nil {
+		return filepath.ToSlash(toPath)
+	}
+	return filepath.ToSlash(rel)
 }

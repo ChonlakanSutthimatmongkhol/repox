@@ -51,6 +51,56 @@ func TestGenerate_CamelInput(t *testing.T) {
 	}
 }
 
+func TestGenerate_CleanArchitectureRoutesAndImports(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "clean_architecture"
+
+	files, err := gen.Generate("watchlist", "flutter_bloc_feature", &conv)
+	require.NoError(t, err)
+
+	byPath := make(map[string]string, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f.Content
+	}
+
+	screenPath := "lib/features/watchlist/presentation/screen/watchlist_screen.dart"
+	blocPath := "lib/features/watchlist/presentation/bloc/watchlist_bloc.dart"
+	repoImplPath := "lib/features/watchlist/data/repositories/watchlist_repository_impl.dart"
+	usecasePath := "lib/features/watchlist/domain/usecases/watchlist_usecase.dart"
+
+	require.Contains(t, byPath, screenPath)
+	require.Contains(t, byPath, blocPath)
+	require.Contains(t, byPath, repoImplPath)
+	require.Contains(t, byPath, usecasePath)
+	assert.Contains(t, byPath[screenPath], "import '../bloc/watchlist_bloc.dart';")
+	assert.Contains(t, byPath[repoImplPath], "import '../../domain/repositories/watchlist_repository.dart';")
+	assert.Contains(t, byPath[repoImplPath], "import '../models/watchlist_request.dart';")
+	assert.Contains(t, byPath[usecasePath], "import '../../data/models/watchlist_response.dart';")
+}
+
+func TestGenerate_GroupedRoutesAndImports(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "grouped"
+
+	files, err := gen.Generate("watchlist", "flutter_bloc_feature", &conv)
+	require.NoError(t, err)
+
+	byPath := make(map[string]string, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f.Content
+	}
+
+	screenPath := "lib/features/watchlist/screen/watchlist_screen.dart"
+	repoImplPath := "lib/features/watchlist/repository/watchlist_repository_impl.dart"
+
+	require.Contains(t, byPath, screenPath)
+	require.Contains(t, byPath, repoImplPath)
+	assert.Contains(t, byPath[screenPath], "import '../bloc/watchlist_bloc.dart';")
+	assert.Contains(t, byPath[repoImplPath], "import '../models/watchlist_request.dart';")
+}
+
 func TestGenerate_UnknownTemplate(t *testing.T) {
 	gen := NewTemplateGenerator()
 	conv := config.DefaultConventions()

@@ -29,6 +29,14 @@ func (s *FlutterScanner) Scan(rootDir string) (*models.Convention, error) {
 		return nil, fmt.Errorf("flutter_scanner: detect structure: %w", err)
 	}
 	conv.FeatureStructure = structure
+	featuresAnalysis, err := AnalyzeFeatureRoot(rootDir, featureRoot)
+	if err != nil {
+		return nil, fmt.Errorf("flutter_scanner: analyze features: %w", err)
+	}
+	conv.FeaturesAnalysis = featuresAnalysis
+	if featuresAnalysis.RecommendedPattern != "" {
+		conv.FeatureStructure = featuresAnalysis.RecommendedPattern
+	}
 
 	testRoot, err := DetectTestRoot(rootDir, "flutter")
 	if err != nil {
@@ -62,6 +70,51 @@ func (s *FlutterScanner) Scan(rootDir string) (*models.Convention, error) {
 		return nil, fmt.Errorf("flutter_scanner: detect routing: %w", err)
 	}
 	conv.Routing = routing
+	conv.PatternMappings = defaultPatternMappings()
 
 	return conv, nil
+}
+
+func defaultPatternMappings() models.PatternMappings {
+	return models.PatternMappings{
+		"flat": {
+			FileRoutes: map[string]string{
+				"bloc":            "",
+				"event":           "",
+				"state":           "",
+				"screen":          "",
+				"repository":      "",
+				"repository_impl": "",
+				"request":         "",
+				"response":        "",
+				"usecase":         "",
+			},
+		},
+		"grouped": {
+			FileRoutes: map[string]string{
+				"bloc":            "bloc",
+				"event":           "bloc",
+				"state":           "bloc",
+				"screen":          "screen",
+				"repository":      "repository",
+				"repository_impl": "repository",
+				"request":         "models",
+				"response":        "models",
+				"usecase":         "usecase",
+			},
+		},
+		"clean_architecture": {
+			FileRoutes: map[string]string{
+				"bloc":            "presentation/bloc",
+				"event":           "presentation/bloc",
+				"state":           "presentation/bloc",
+				"screen":          "presentation/screen",
+				"repository":      "domain/repositories",
+				"repository_impl": "data/repositories",
+				"request":         "data/models",
+				"response":        "data/models",
+				"usecase":         "domain/usecases",
+			},
+		},
+	}
 }

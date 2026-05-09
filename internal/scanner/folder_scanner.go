@@ -20,7 +20,7 @@ var flutterTestRootCandidates = []string{
 	"test",
 }
 
-// DetectFeatureRoot returns the first existing feature root directory for the project type.
+// DetectFeatureRoot returns the existing feature root with the most feature folders.
 // Returns an empty string (no error) if none is found.
 func DetectFeatureRoot(rootDir, projectType string) (string, error) {
 	var candidates []string
@@ -33,62 +33,29 @@ func DetectFeatureRoot(rootDir, projectType string) (string, error) {
 		return "", nil
 	}
 
+	best := ""
+	bestCount := -1
 	for _, c := range candidates {
 		full := filepath.Join(rootDir, c)
 		if info, err := os.Stat(full); err == nil && info.IsDir() {
-			return c, nil
+			count := countFeatureFolders(full)
+			if best == "" || count > bestCount {
+				best = c
+				bestCount = count
+			}
 		}
 	}
-	return "", nil
+	return best, nil
 }
 
 // DetectFeatureStructure inspects the first-level subdirectories of featureRoot
 // and returns "clean_architecture", "grouped", or "flat".
 func DetectFeatureStructure(featureRoot string) (string, error) {
-	entries, err := os.ReadDir(featureRoot)
-	if err != nil {
-		return "flat", nil
+	analysis, err := AnalyzeFeatureRoot(filepath.Dir(featureRoot), filepath.Base(featureRoot))
+	if err == nil && analysis.RecommendedPattern != "" {
+		return analysis.RecommendedPattern, nil
 	}
-
-	cleanArch := map[string]bool{"presentation": false, "domain": false, "data": false}
-	grouped := map[string]bool{"bloc": false, "screen": false, "repository": false}
-
-	for _, entry := range entries {
-		if !entry.IsDir() || excludedDirs[entry.Name()] {
-			continue
-		}
-		featureDir := filepath.Join(featureRoot, entry.Name())
-		subs, err := os.ReadDir(featureDir)
-		if err != nil {
-			continue
-		}
-		for _, sub := range subs {
-			if !sub.IsDir() {
-				continue
-			}
-			name := sub.Name()
-			if _, ok := cleanArch[name]; ok {
-				cleanArch[name] = true
-			}
-			if _, ok := grouped[name]; ok {
-				grouped[name] = true
-			}
-		}
-	}
-
-	cleanCount := 0
-	for _, v := range cleanArch {
-		if v {
-			cleanCount++
-		}
-	}
-	if cleanCount >= 2 {
-		return "clean_architecture", nil
-	}
-	if grouped["bloc"] || grouped["screen"] || grouped["repository"] {
-		return "grouped", nil
-	}
-	return "flat", nil
+	return DetectFeaturePattern(featureRoot), nil
 }
 
 // DetectTestRoot returns the first existing test root directory for the project type.
@@ -109,4 +76,18 @@ func DetectTestRoot(rootDir, projectType string) (string, error) {
 		}
 	}
 	return "test", nil
+}
+
+func countFeatureFolders(featureRoot string) int {
+	entries, err := os.ReadDir(featureRoot)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() && !excludedDirs[entry.Name()] {
+			count++
+		}
+	}
+	return count
 }
