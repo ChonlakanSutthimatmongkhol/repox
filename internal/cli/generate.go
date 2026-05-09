@@ -213,24 +213,43 @@ func runFormatter(paths []string, cmd *cobra.Command) {
 	if len(paths) == 0 {
 		return
 	}
-	dartPath, err := exec.LookPath("dart")
-	if err != nil {
-		return // dart not installed — silently skip
-	}
-
-	var dartFiles []string
+	var dartFiles, goFiles []string
 	for _, p := range paths {
-		if filepath.Ext(p) == ".dart" {
+		switch filepath.Ext(p) {
+		case ".dart":
 			dartFiles = append(dartFiles, p)
+		case ".go":
+			goFiles = append(goFiles, p)
 		}
 	}
-	if len(dartFiles) == 0 {
+	if len(dartFiles) > 0 {
+		runDartFormat(dartFiles, cmd)
+	}
+	if len(goFiles) > 0 {
+		runGoFormat(goFiles, cmd)
+	}
+}
+
+func runDartFormat(files []string, cmd *cobra.Command) {
+	dartPath, err := exec.LookPath("dart")
+	if err != nil {
 		return
 	}
-
-	args := append([]string{"format"}, dartFiles...)
+	args := append([]string{"format"}, files...)
 	out, err := exec.Command(dartPath, args...).CombinedOutput()
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "Warning: dart format failed: %s\n", string(out))
+	}
+}
+
+func runGoFormat(files []string, cmd *cobra.Command) {
+	gofmtPath, err := exec.LookPath("gofmt")
+	if err != nil {
+		return
+	}
+	args := append([]string{"-w"}, files...)
+	out, err := exec.Command(gofmtPath, args...).CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Warning: gofmt failed: %s\n", string(out))
 	}
 }

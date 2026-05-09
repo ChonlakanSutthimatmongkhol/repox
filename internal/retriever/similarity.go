@@ -60,7 +60,9 @@ func nameScore(target string, example models.Example) float64 {
 	return float64(matches) / float64(len(targetWords))
 }
 
-// structureScore measures how many components the example has (relative to maximum 5).
+// structureScore measures how many components the example has (max 1.0).
+// Counts Flutter fields (bloc, screen, usecase) and Go fields (handler, service)
+// plus common fields (repository, test). Caps at 1.0.
 func structureScore(example models.Example) float64 {
 	m := example.Metadata
 	count := 0
@@ -68,6 +70,12 @@ func structureScore(example models.Example) float64 {
 		count++
 	}
 	if m.HasScreen {
+		count++
+	}
+	if m.HasHandler {
+		count++
+	}
+	if m.HasService {
 		count++
 	}
 	if m.HasRepository {
@@ -82,7 +90,11 @@ func structureScore(example models.Example) float64 {
 	if count == 0 {
 		return 0
 	}
-	return float64(count) / 5.0
+	score := float64(count) / 5.0
+	if score > 1.0 {
+		return 1.0
+	}
+	return score
 }
 
 // importScore measures shared import fraction.

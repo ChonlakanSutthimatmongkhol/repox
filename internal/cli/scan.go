@@ -54,6 +54,8 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	switch projectType {
 	case "flutter", "dart":
 		s = &scanner.FlutterScanner{}
+	case "go":
+		s = &scanner.GoScanner{}
 	default:
 		fmt.Fprintf(cmd.OutOrStdout(), "Warning: unsupported project type %q — saving partial results\n", projectType)
 		conv := &models.Convention{ProjectType: projectType}
@@ -83,6 +85,7 @@ func saveScanResult(cmd *cobra.Command, conv *models.Convention) error {
 		if conv.TestRoot != "" {
 			cfg.TestRoot = conv.TestRoot
 		}
+		cfg.DefaultTemplate = defaultTemplateFor(conv.ProjectType)
 		_ = config.Save(config.RepoxPath("config.json"), cfg)
 	}
 
@@ -105,22 +108,45 @@ func printScanSummary(cmd *cobra.Command, conv *models.Convention) {
 	out := cmd.OutOrStdout()
 	fmt.Fprintln(out, "Scanned repository:")
 	fmt.Fprintf(out, "  Project type:      %s\n", conv.ProjectType)
-	fmt.Fprintf(out, "  State management:  %s\n", conv.StateManagement)
 	fmt.Fprintf(out, "  Feature root:      %s\n", conv.FeatureRoot)
 	fmt.Fprintf(out, "  Feature structure: %s\n", conv.FeatureStructure)
 	fmt.Fprintf(out, "  Test root:         %s\n", conv.TestRoot)
-	fmt.Fprintln(out, "  Naming:")
-	fmt.Fprintf(out, "    Screen suffix:   %s\n", conv.Naming.ScreenSuffix)
-	fmt.Fprintf(out, "    Bloc suffix:     %s\n", conv.Naming.BlocSuffix)
-	fmt.Fprintf(out, "    Event suffix:    %s\n", conv.Naming.EventSuffix)
-	fmt.Fprintf(out, "    State suffix:    %s\n", conv.Naming.StateSuffix)
-	fmt.Fprintf(out, "  Routing:           %s (%s)\n", conv.Routing.Type, conv.Routing.RouteFile)
+
+	switch conv.ProjectType {
+	case "flutter", "dart":
+		fmt.Fprintf(out, "  State management:  %s\n", conv.StateManagement)
+		fmt.Fprintln(out, "  Naming:")
+		fmt.Fprintf(out, "    Screen suffix:   %s\n", conv.Naming.ScreenSuffix)
+		fmt.Fprintf(out, "    Bloc suffix:     %s\n", conv.Naming.BlocSuffix)
+		fmt.Fprintf(out, "    Event suffix:    %s\n", conv.Naming.EventSuffix)
+		fmt.Fprintf(out, "    State suffix:    %s\n", conv.Naming.StateSuffix)
+		fmt.Fprintf(out, "  Routing:           %s (%s)\n", conv.Routing.Type, conv.Routing.RouteFile)
+	case "go":
+		if conv.ModulePath != "" {
+			fmt.Fprintf(out, "  Module:            %s\n", conv.ModulePath)
+		}
+		fmt.Fprintln(out, "  Naming:")
+		fmt.Fprintf(out, "    Handler suffix:  %s\n", conv.Naming.HandlerSuffix)
+		fmt.Fprintf(out, "    Service suffix:  %s\n", conv.Naming.ServiceSuffix)
+		fmt.Fprintf(out, "    Repo suffix:     %s\n", conv.Naming.RepositorySuffix)
+		fmt.Fprintf(out, "  HTTP framework:    %s\n", conv.Routing.Type)
+	}
+
 	fmt.Fprintf(out, "  Common imports:    %d detected\n", len(conv.CommonImports))
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Discover:")
 	fmt.Fprintf(out, "  Feature root:       %s\n", conv.FeatureRoot)
 	fmt.Fprintf(out, "  Features found:     %d\n", len(conv.FeaturesAnalysis.Features))
 	printPatternAnalysis(out, conv.FeaturesAnalysis)
+}
+
+func defaultTemplateFor(projectType string) string {
+	switch projectType {
+	case "go":
+		return "go_clean_feature"
+	default:
+		return "flutter_bloc_feature"
+	}
 }
 
 // printPatternAnalysis displays pattern distribution and recommendations

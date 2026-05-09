@@ -15,6 +15,8 @@ type FeatureMetadata struct {
 	HasScreen     bool     `json:"has_screen"`
 	HasRepository bool     `json:"has_repository"`
 	HasUseCase    bool     `json:"has_usecase"`
+	HasHandler    bool     `json:"has_handler"`
+	HasService    bool     `json:"has_service"`
 	HasTest       bool     `json:"has_test"`
 	Imports       []string `json:"imports"`
 	Structure     string   `json:"structure"` // clean_architecture, grouped, flat

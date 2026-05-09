@@ -1,0 +1,17 @@
+package {{.PackageName}}_test
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test{{.PascalName}}{{.HandlerSuffix}}_Get(t *testing.T) {
+	t.Run("returns 200", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/{{.SnakeName}}", nil)
+		_ = w
+		_ = r
+		// TODO: wire up handler and assert response
+	})
+}

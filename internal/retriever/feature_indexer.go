@@ -55,22 +55,27 @@ func IndexFeatures(rootDir string, conv *models.Convention) ([]models.Example, e
 }
 
 func buildExample(rootDir, featureDir, name string, conv *models.Convention) models.Example {
+	if conv.ProjectType == "go" {
+		return buildGoExample(rootDir, featureDir, name, conv)
+	}
+	return buildFlutterExample(rootDir, featureDir, name, conv)
+}
+
+// ── Flutter ───────────────────────────────────────────────────────────────────
+
+func buildFlutterExample(rootDir, featureDir, name string, conv *models.Convention) models.Example {
 	relPath, _ := filepath.Rel(rootDir, featureDir)
 
 	files := map[string]string{}
 	var allImports []string
 
 	_ = filepath.Walk(featureDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(path, ".dart") {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".dart") {
 			return nil
 		}
 		rel, _ := filepath.Rel(rootDir, path)
 		base := filepath.Base(path)
 
-		// Assign role by matching naming convention suffixes.
 		switch {
 		case hasSuffix(base, conv.Naming.ScreenSuffix):
 			files["screen"] = rel
@@ -90,31 +95,20 @@ func buildExample(rootDir, featureDir, name string, conv *models.Convention) mod
 			files["usecase"] = rel
 		}
 
-		imports := parseDartImports(path)
-		allImports = append(allImports, imports...)
+		allImports = append(allImports, parseDartImports(path)...)
 		return nil
 	})
 
-	// Deduplicate imports.
-	importSet := map[string]bool{}
-	for _, imp := range allImports {
-		importSet[imp] = true
-	}
-	uniqueImports := make([]string, 0, len(importSet))
-	for imp := range importSet {
-		uniqueImports = append(uniqueImports, imp)
-	}
-	sort.Strings(uniqueImports)
-
-	structure := detectStructure(featureDir)
-	patterns := derivePatterns(uniqueImports)
+	uniqueImports := dedup(allImports)
+	structure := detectFlutterStructure(featureDir)
+	patterns := deriveFlutterPatterns(uniqueImports)
 
 	meta := models.FeatureMetadata{
 		HasBloc:       files["bloc"] != "",
 		HasScreen:     files["screen"] != "",
 		HasRepository: files["repository"] != "",
 		HasUseCase:    files["usecase"] != "",
-		HasTest:       hasTestFiles(rootDir, name),
+		HasTest:       hasFlutterTestFiles(rootDir, name),
 		Imports:       uniqueImports,
 		Structure:     structure,
 	}
@@ -134,20 +128,7 @@ func hasSuffix(filename, suffix string) bool {
 		return false
 	}
 	name := strings.TrimSuffix(filename, ".dart")
-	snakeSuffix := toSnakeSuffix(suffix)
-	return strings.HasSuffix(name, "_"+snakeSuffix)
-}
-
-// toSnakeSuffix converts a PascalCase suffix to snake_case (e.g. "UseCase" → "use_case").
-func toSnakeSuffix(s string) string {
-	var b strings.Builder
-	for i, r := range s {
-		if r >= 'A' && r <= 'Z' && i > 0 {
-			b.WriteByte('_')
-		}
-		b.WriteRune(r | 0x20) // to lower
-	}
-	return b.String()
+	return strings.HasSuffix(name, "_"+toSnakeSuffix(suffix))
 }
 
 func parseDartImports(path string) []string {
@@ -158,9 +139,9 @@ func parseDartImports(path string) []string {
 	defer f.Close()
 
 	var imports []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
 		if !strings.HasPrefix(line, "import") {
 			continue
 		}
@@ -173,22 +154,7 @@ func parseDartImports(path string) []string {
 	return imports
 }
 
-func extractQuoted(line string) string {
-	for _, q := range []byte{'"', '\''} {
-		start := strings.IndexByte(line, q)
-		if start == -1 {
-			continue
-		}
-		end := strings.IndexByte(line[start+1:], q)
-		if end == -1 {
-			continue
-		}
-		return line[start+1 : start+1+end]
-	}
-	return ""
-}
-
-func detectStructure(featureDir string) string {
+func detectFlutterStructure(featureDir string) string {
 	subs, err := os.ReadDir(featureDir)
 	if err != nil {
 		return "flat"
@@ -222,7 +188,7 @@ func detectStructure(featureDir string) string {
 	return "flat"
 }
 
-func derivePatterns(imports []string) []string {
+func deriveFlutterPatterns(imports []string) []string {
 	patternMap := map[string]string{
 		"package:flutter_bloc/flutter_bloc.dart": "uses flutter_bloc",
 		"package:go_router/go_router.dart":        "uses go_router",
@@ -245,7 +211,7 @@ func derivePatterns(imports []string) []string {
 	return patterns
 }
 
-func hasTestFiles(rootDir, featureName string) bool {
+func hasFlutterTestFiles(rootDir, featureName string) bool {
 	testCandidates := []string{
 		filepath.Join(rootDir, "test", "features", featureName),
 		filepath.Join(rootDir, "test", featureName),
@@ -255,7 +221,6 @@ func hasTestFiles(rootDir, featureName string) bool {
 			return true
 		}
 	}
-	// Also check for any *_test.dart under test/ with featureName in path.
 	testDir := filepath.Join(rootDir, "test")
 	found := false
 	_ = filepath.Walk(testDir, func(path string, info os.FileInfo, err error) error {
@@ -269,4 +234,199 @@ func hasTestFiles(rootDir, featureName string) bool {
 		return nil
 	})
 	return found
+}
+
+// ── Go ────────────────────────────────────────────────────────────────────────
+
+func buildGoExample(rootDir, featureDir, name string, conv *models.Convention) models.Example {
+	relPath, _ := filepath.Rel(rootDir, featureDir)
+
+	files := map[string]string{}
+	var allImports []string
+
+	_ = filepath.Walk(featureDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		base := filepath.Base(path)
+		if !strings.HasSuffix(base, ".go") || strings.HasSuffix(base, "_test.go") {
+			return nil
+		}
+		rel, _ := filepath.Rel(rootDir, path)
+
+		switch {
+		case hasGoSuffix(base, conv.Naming.HandlerSuffix):
+			files["handler"] = rel
+		case hasGoSuffix(base, conv.Naming.ServiceSuffix):
+			files["service"] = rel
+		case hasGoSuffix(base, conv.Naming.RepositorySuffix):
+			if _, exists := files["repository"]; !exists {
+				files["repository"] = rel
+			} else {
+				files["repository_impl"] = rel
+			}
+		}
+
+		allImports = append(allImports, parseGoImportsFromFile(path)...)
+		return nil
+	})
+
+	uniqueImports := dedup(allImports)
+	structure := detectGoStructure(featureDir)
+	patterns := deriveGoPatterns(uniqueImports)
+
+	meta := models.FeatureMetadata{
+		HasHandler:    files["handler"] != "",
+		HasService:    files["service"] != "",
+		HasRepository: files["repository"] != "",
+		HasTest:       hasGoTestFiles(featureDir),
+		Imports:       uniqueImports,
+		Structure:     structure,
+	}
+
+	return models.Example{
+		Name:     name,
+		Path:     relPath,
+		Files:    files,
+		Patterns: patterns,
+		Metadata: meta,
+	}
+}
+
+func hasGoSuffix(filename, suffix string) bool {
+	if suffix == "" {
+		return false
+	}
+	name := strings.TrimSuffix(filename, ".go")
+	return strings.HasSuffix(name, "_"+toSnakeSuffix(suffix))
+}
+
+func parseGoImportsFromFile(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	var imports []string
+	inBlock := false
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "import (" {
+			inBlock = true
+			continue
+		}
+		if inBlock && line == ")" {
+			inBlock = false
+			continue
+		}
+		if inBlock || strings.HasPrefix(line, `import "`) {
+			imp := extractQuoted(line)
+			if imp != "" && strings.Contains(imp, ".") { // skip stdlib (no dot)
+				imports = append(imports, imp)
+			}
+		}
+	}
+	return imports
+}
+
+func detectGoStructure(featureDir string) string {
+	subs, err := os.ReadDir(featureDir)
+	if err != nil {
+		return "flat"
+	}
+	for _, sub := range subs {
+		if !sub.IsDir() {
+			continue
+		}
+		switch sub.Name() {
+		case "delivery", "usecase", "domain", "repository":
+			return "clean_architecture"
+		}
+	}
+	return "flat"
+}
+
+func deriveGoPatterns(imports []string) []string {
+	// prefix → pattern label (versioned imports like chi/v5 matched by prefix)
+	patternMap := map[string]string{
+		"github.com/gin-gonic/gin":    "uses gin",
+		"github.com/go-chi/chi":       "uses chi",
+		"github.com/labstack/echo":    "uses echo",
+		"github.com/gofiber/fiber":    "uses fiber",
+		"github.com/gorilla/mux":      "uses gorilla_mux",
+		"gorm.io/gorm":                "uses gorm",
+		"github.com/jmoiron/sqlx":     "uses sqlx",
+		"go.mongodb.org/mongo-driver": "uses mongodb",
+	}
+	seen := map[string]bool{}
+	var patterns []string
+	for _, imp := range imports {
+		for prefix, label := range patternMap {
+			if (imp == prefix || strings.HasPrefix(imp, prefix+"/")) && !seen[label] {
+				patterns = append(patterns, label)
+				seen[label] = true
+			}
+		}
+	}
+	sort.Strings(patterns)
+	return patterns
+}
+
+func hasGoTestFiles(featureDir string) bool {
+	found := false
+	_ = filepath.Walk(featureDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if strings.HasSuffix(path, "_test.go") {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
+// ── shared helpers ────────────────────────────────────────────────────────────
+
+// toSnakeSuffix converts a PascalCase suffix to snake_case (e.g. "UseCase" → "use_case").
+func toSnakeSuffix(s string) string {
+	var b strings.Builder
+	for i, r := range s {
+		if r >= 'A' && r <= 'Z' && i > 0 {
+			b.WriteByte('_')
+		}
+		b.WriteRune(r | 0x20)
+	}
+	return b.String()
+}
+
+func extractQuoted(line string) string {
+	for _, q := range []byte{'"', '\''} {
+		start := strings.IndexByte(line, q)
+		if start == -1 {
+			continue
+		}
+		end := strings.IndexByte(line[start+1:], q)
+		if end == -1 {
+			continue
+		}
+		return line[start+1 : start+1+end]
+	}
+	return ""
+}
+
+func dedup(items []string) []string {
+	seen := map[string]bool{}
+	result := make([]string, 0, len(items))
+	for _, v := range items {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	sort.Strings(result)
+	return result
 }

@@ -16,11 +16,17 @@ func DetectNamingConventions(featureRoot, projectType string) (models.NamingConv
 		FileCase:  "snake_case",
 	}
 
-	if projectType != "flutter" && projectType != "dart" {
+	switch projectType {
+	case "flutter", "dart":
+		return detectFlutterNaming(featureRoot, conv)
+	case "go":
+		return detectGoNaming(featureRoot, conv)
+	default:
 		return conv, nil
 	}
+}
 
-	// Each role maps candidate suffix → vote count.
+func detectFlutterNaming(featureRoot string, conv models.NamingConvention) (models.NamingConvention, error) {
 	screenVotes := map[string]int{"Screen": 0, "Page": 0, "View": 0}
 	blocVotes := map[string]int{"Bloc": 0, "Cubit": 0}
 	repoVotes := map[string]int{"Repository": 0, "Repo": 0}
@@ -29,14 +35,10 @@ func DetectNamingConventions(featureRoot, projectType string) (models.NamingConv
 	stateVotes := map[string]int{"State": 0}
 
 	_ = filepath.WalkDir(featureRoot, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(path, ".dart") {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".dart") {
 			return nil
 		}
 		base := strings.TrimSuffix(filepath.Base(path), ".dart")
-
 		switch {
 		case strings.HasSuffix(base, "_screen"):
 			screenVotes["Screen"]++
@@ -68,7 +70,42 @@ func DetectNamingConventions(featureRoot, projectType string) (models.NamingConv
 	conv.UsecaseSuffix = majorityVote(usecaseVotes, "UseCase")
 	conv.EventSuffix = majorityVote(eventVotes, "Event")
 	conv.StateSuffix = majorityVote(stateVotes, "State")
+	return conv, nil
+}
 
+func detectGoNaming(featureRoot string, conv models.NamingConvention) (models.NamingConvention, error) {
+	handlerVotes := map[string]int{"Handler": 0, "Controller": 0}
+	serviceVotes := map[string]int{"Service": 0, "UseCase": 0}
+	repoVotes := map[string]int{"Repository": 0, "Repo": 0, "Store": 0}
+
+	_ = filepath.WalkDir(featureRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		base := strings.TrimSuffix(filepath.Base(path), ".go")
+		base = strings.TrimSuffix(base, "_test")
+		switch {
+		case strings.HasSuffix(base, "_handler"):
+			handlerVotes["Handler"]++
+		case strings.HasSuffix(base, "_controller"):
+			handlerVotes["Controller"]++
+		case strings.HasSuffix(base, "_service"):
+			serviceVotes["Service"]++
+		case strings.HasSuffix(base, "_usecase") || strings.HasSuffix(base, "_use_case"):
+			serviceVotes["UseCase"]++
+		case strings.HasSuffix(base, "_repository"):
+			repoVotes["Repository"]++
+		case strings.HasSuffix(base, "_repo"):
+			repoVotes["Repo"]++
+		case strings.HasSuffix(base, "_store"):
+			repoVotes["Store"]++
+		}
+		return nil
+	})
+
+	conv.HandlerSuffix = majorityVote(handlerVotes, "Handler")
+	conv.ServiceSuffix = majorityVote(serviceVotes, "Service")
+	conv.RepositorySuffix = majorityVote(repoVotes, "Repository")
 	return conv, nil
 }
 
