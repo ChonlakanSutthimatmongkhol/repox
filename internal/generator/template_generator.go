@@ -652,7 +652,7 @@ func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) Tem
 	}
 	if a, ok := like.Anatomy["bloc"]; ok && len(a.BaseClasses) > 0 {
 		ctx.BlocBaseClass = a.BaseClasses[0]
-		ctx.BlocBaseImports = append(baseClassImports(a.Imports, a.BaseClasses), abstractStubImports(a.Imports)...)
+		ctx.BlocBaseImports = append(baseClassImports(a.Imports, a.BaseClasses), abstractStubImports(a.AbstractOverrides, a.Imports)...)
 		ctx.BlocAbstractStubs = buildAbstractStubs(a.AbstractOverrides)
 	}
 	if a, ok := like.Anatomy["screen"]; ok {
@@ -701,21 +701,44 @@ func buildAbstractStubs(overrides []string) []string {
 	return stubs
 }
 
-// abstractStubImports returns imports from the anatomy that are needed to
-// satisfy parameter/return types in abstract override stubs but are not
-// already in core/base (e.g. account_status_model, failure_response).
-func abstractStubImports(imports []string) []string {
+// abstractStubImports finds imports that provide types referenced in the abstract override
+// signatures. It extracts uppercase type names from the signatures and matches them
+// against import filenames — generic, no project-specific hardcoding.
+func abstractStubImports(overrides []string, allImports []string) []string {
+	if len(overrides) == 0 {
+		return nil
+	}
+	// Collect all uppercase type names from the override signatures
+	typeNames := map[string]bool{}
+	for _, sig := range overrides {
+		for _, tok := range strings.FieldsFunc(sig, func(r rune) bool {
+			return !isIdentChar(r)
+		}) {
+			if len(tok) > 0 && tok[0] >= 'A' && tok[0] <= 'Z' {
+				typeNames[tok] = true
+			}
+		}
+	}
+
 	var result []string
-	for _, imp := range imports {
-		base := strings.ToLower(filepath.Base(imp))
-		if strings.Contains(base, "account_status_model") ||
-			strings.Contains(base, "failure_response") ||
-			strings.Contains(base, "failure_response") ||
-			strings.Contains(base, "account_status_helper") {
-			result = append(result, imp)
+	for _, imp := range allImports {
+		if strings.Contains(imp, "/core/base/") {
+			continue // already handled by baseClassImports
+		}
+		impBase := strings.ToLower(strings.TrimSuffix(filepath.Base(imp), ".dart"))
+		for typ := range typeNames {
+			// Match: snake_case of the type name appears in the import filename
+			if strings.Contains(impBase, strings.ToLower(ToSnakeCase(typ))) {
+				result = append(result, imp)
+				break
+			}
 		}
 	}
 	return result
+}
+
+func isIdentChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
 }
 
 func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Convention) TemplateContext {
