@@ -11,10 +11,9 @@ class {{.PascalName}}{{.BlocSuffix}} extends Bloc<{{.PascalName}}{{.EventSuffix}
   Future<void> _onStarted(
     {{.PascalName}}Started event,
     Emitter<{{.PascalName}}{{.StateSuffix}}> emit,
-  ) {
+  ) async {
     emit(const {{.PascalName}}Loading());
     // TODO: implement
     emit(const {{.PascalName}}Loaded());
-    return Future.value();
   }
 }

@@ -25,8 +25,6 @@ type TemplateContext struct {
 	RepositorySuffix string
 	UsecaseSuffix    string
 	CommonImports    []string
-	FeaturePattern   string // "clean_architecture", "grouped", or "flat"
-	PackageName      string // detected package name like "investment_module"
 }
 
 // GeneratedFile pairs an output path with its rendered content.
@@ -90,7 +88,6 @@ func (g *TemplateGenerator) renderFile(tmplPath string, ctx TemplateContext) (st
 
 // outputPath derives the destination file path from the template filename.
 // Template names follow the pattern: <kind>.dart.tmpl → <snakeName>_<kind>.dart
-// Uses pattern mappings from config to route files to appropriate subdirectories.
 func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) string {
 	base := filepath.Base(tmplPath)
 	// strip .tmpl extension
@@ -98,74 +95,14 @@ func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) s
 	// prefix with snake feature name
 	outName := ctx.SnakeName + "_" + name
 
-	// bloc_test.dart → test root
+	// bloc_test.dart → test root, everything else → feature root
 	if strings.Contains(name, "test") {
 		return filepath.Join(conv.TestRoot, ctx.SnakeName, outName)
 	}
-
-	// Check if pattern mappings exist in config
-	if len(conv.FeaturesAnalysis.PatternMappings) > 0 {
-		// Get mappings for the detected/recommended pattern
-		pattern := conv.FeatureStructure
-		if pattern == "" {
-			pattern = conv.FeaturesAnalysis.RecommendedPattern
-		}
-
-		if mappings, ok := conv.FeaturesAnalysis.PatternMappings[pattern]; ok {
-			for _, m := range mappings {
-				if m.FileName == name {
-					if m.Subdir != "" {
-						return filepath.Join(conv.FeatureRoot, ctx.SnakeName, m.Subdir, outName)
-					}
-				}
-			}
-		}
-	}
-
-	// Default: no subdirectory
 	return filepath.Join(conv.FeatureRoot, ctx.SnakeName, outName)
 }
 
 func buildContext(featureName string, conv *models.Convention) TemplateContext {
-	// Extract project package name from common imports
-	// Look for packages that appear to be project-specific (not flutter/dart ecosystem packages)
-	packageName := ""
-	if len(conv.CommonImports) > 0 {
-		// Count packages, preferring ones that are not standard packages
-		pkgCounts := make(map[string]int)
-		for _, imp := range conv.CommonImports {
-			parts := strings.Split(imp, "/")
-			if len(parts) > 0 {
-				pkgParts := strings.Split(parts[0], ":")
-				if len(pkgParts) > 1 {
-					pkg := pkgParts[1]
-					// Prefer non-standard packages
-					if !isStandardPackage(pkg) {
-						pkgCounts[pkg]++
-					}
-				}
-			}
-		}
-		// Find most common package
-		maxCount := 0
-		for pkg, count := range pkgCounts {
-			if count > maxCount {
-				maxCount = count
-				packageName = pkg
-			}
-		}
-		// If no custom package found, use first package
-		if packageName == "" && len(conv.CommonImports) > 0 {
-			parts := strings.Split(conv.CommonImports[0], "/")
-			if len(parts) > 0 {
-				pkgParts := strings.Split(parts[0], ":")
-				if len(pkgParts) > 1 {
-					packageName = pkgParts[1]
-				}
-			}
-		}
-	}
-
 	return TemplateContext{
 		FeatureName:      featureName,
 		PascalName:       ToPascalCase(featureName),
@@ -178,23 +115,5 @@ func buildContext(featureName string, conv *models.Convention) TemplateContext {
 		RepositorySuffix: conv.Naming.RepositorySuffix,
 		UsecaseSuffix:    conv.Naming.UsecaseSuffix,
 		CommonImports:    conv.CommonImports,
-		FeaturePattern:   conv.FeatureStructure,
-		PackageName:      packageName,
 	}
-}
-
-// isStandardPackage checks if a package is from the standard Dart/Flutter ecosystem
-func isStandardPackage(pkg string) bool {
-	standardPkgs := map[string]bool{
-		"flutter":        true,
-		"dart":           true,
-		"flutter_bloc":   true,
-		"bloc":           true,
-		"json_annotation": true,
-		"freezed":        true,
-		"go_router":      true,
-		"provider":       true,
-		"get_it":         true,
-	}
-	return standardPkgs[pkg]
 }
