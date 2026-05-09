@@ -10,7 +10,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
-	"github.com/ChonlakanSutthimatmongkhol/repox/internal/ai"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/generator"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
@@ -22,8 +21,6 @@ var (
 	generateDryRun       bool
 	generateTemplate     string
 	generateWithExamples bool
-	generateAI           bool
-	generateOpus         bool
 )
 
 var generateCmd = &cobra.Command{
@@ -43,8 +40,6 @@ func init() {
 	generateFeatureCmd.Flags().BoolVar(&generateDryRun, "dry-run", false, "Preview files without writing")
 	generateFeatureCmd.Flags().StringVarP(&generateTemplate, "template", "t", "", "Template to use (overrides config)")
 	generateFeatureCmd.Flags().BoolVar(&generateWithExamples, "with-examples", false, "Find and show similar existing features before generating")
-	generateFeatureCmd.Flags().BoolVar(&generateAI, "ai", false, "Use AI (Claude) to generate file contents")
-	generateFeatureCmd.Flags().BoolVar(&generateOpus, "opus", false, "Use Claude Opus model instead of Sonnet (requires --ai)")
 	generateCmd.AddCommand(generateFeatureCmd)
 	rootCmd.AddCommand(generateCmd)
 }
@@ -92,82 +87,20 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Generate files — template mode or AI mode
-	var files []generator.GeneratedFile
+	// Generate files from local templates.
 	genMode := "template"
+	gen := generator.NewTemplateGenerator()
+	files, err := gen.Generate(featureName, tmplName, &conv)
+	if err != nil {
+		return fmt.Errorf("generate: %w", err)
+	}
 
-	if generateAI {
-		genMode = "ai"
-		apiKey := os.Getenv("ANTHROPIC_API_KEY")
-		if apiKey == "" {
-			return fmt.Errorf("set ANTHROPIC_API_KEY environment variable or configure in .repox/config.json")
+	if generateDryRun {
+		fmt.Fprintln(cmd.OutOrStdout(), "Dry run — no files written:")
+		for _, f := range files {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", f.Path)
 		}
-
-		model := cfg.AI.GenerationModel
-		if generateOpus {
-			model = "claude-opus-4-7"
-		}
-
-		// Derive target file paths from template generator (dry run)
-		tplGen := generator.NewTemplateGenerator()
-		tplFiles, err := tplGen.Generate(featureName, tmplName, &conv)
-		if err != nil {
-			return fmt.Errorf("generate: get target files: %w", err)
-		}
-		targetPaths := make([]string, len(tplFiles))
-		for i, f := range tplFiles {
-			targetPaths[i] = f.Path
-		}
-
-		if generateDryRun {
-			fmt.Fprintln(cmd.OutOrStdout(), "Dry run — AI would generate these files:")
-			for _, p := range targetPaths {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", p)
-			}
-			return nil
-		}
-
-		// Load examples and lessons for context
-		examples, _ := config.Load[[]models.Example](config.RepoxPath("examples.json"))
-		if len(examples) == 0 {
-			examples, _ = retriever.IndexFeatures(cwd, &conv)
-		}
-		similar := retriever.FindSimilar(featureName, examples, 3)
-		lessons, _ := config.Load[[]models.Lesson](config.RepoxPath("lessons.json"))
-
-		fmt.Fprintf(cmd.OutOrStdout(), "Generating with AI (%s)...\n", model)
-		client := ai.NewAnthropicClient(apiKey, model)
-		aiResp, err := client.Generate(ai.GenerateRequest{
-			FeatureName:    featureName,
-			Conventions:    &conv,
-			Examples:       similar,
-			Lessons:        lessons,
-			TargetFiles:    targetPaths,
-			TargetTemplate: tmplName,
-			RootDir:        cwd,
-		})
-		if err != nil {
-			return fmt.Errorf("generate: AI: %w", err)
-		}
-
-		files = make([]generator.GeneratedFile, len(aiResp.Files))
-		for i, f := range aiResp.Files {
-			files[i] = generator.GeneratedFile{Path: f.Path, Content: f.Content}
-		}
-	} else {
-		gen := generator.NewTemplateGenerator()
-		files, err = gen.Generate(featureName, tmplName, &conv)
-		if err != nil {
-			return fmt.Errorf("generate: %w", err)
-		}
-
-		if generateDryRun {
-			fmt.Fprintln(cmd.OutOrStdout(), "Dry run — no files written:")
-			for _, f := range files {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", f.Path)
-			}
-			return nil
-		}
+		return nil
 	}
 
 	results, err := generator.WriteFiles(files, cwd, generateForce)
@@ -202,10 +135,7 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 		filePaths[i] = r.Path
 	}
 
-	snapshotDir := ""
-	if genMode == "ai" {
-		snapshotDir = saveSnapshot(genID, files, cwd)
-	}
+	snapshotDir := saveSnapshot(genID, files, cwd)
 
 	_ = appendGeneration(models.Generation{
 		ID:          genID,

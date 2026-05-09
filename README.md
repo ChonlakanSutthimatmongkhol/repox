@@ -12,7 +12,7 @@
 
 ## 🎯 What is Repox?
 
-Repox scans your codebase, learns your project's conventions, and generates feature scaffolds that match your team's style. No more copy-pasting from old features. No more writing AI instructions from scratch for every repo.
+Repox scans your codebase, learns your project's conventions, generates project-specific AI instructions, and provides local MCP tools. Repox itself has no external AI integration.
 
 ```bash
 # 1. Initialize in your Flutter/Go repo
@@ -30,11 +30,12 @@ repox generate feature watchlist --dry-run
 # 5. Find similar existing features before generating
 repox generate feature watchlist --with-examples
 
-repox generate feature watchlist --ai    # AI-assisted generation (Claude)
-repox generate feature watchlist --ai --opus  # Use Claude Opus
-repox learn                              # Learn from your edits
-repox learn --list                       # Show stored lessons
-repox --mcp                              # Start as MCP server (Claude Code / Copilot / Cursor)
+# 6. Generate a project skill for Copilot Enterprise / AI hosts
+repox skill generate
+
+repox learn       # Learn from reviewed local edits
+repox learn --list
+repox --mcp       # Start as a local MCP server (Claude Code / Copilot / Cursor)
 ```
 
 ---
@@ -44,7 +45,7 @@ repox --mcp                              # Start as MCP server (Claude Code / Co
 ### Prerequisites
 
 - **Go 1.25+** — [install](https://go.dev/dl/)
-- **ANTHROPIC_API_KEY** — required for `--ai` and `repox learn` (get one at [console.anthropic.com](https://console.anthropic.com))
+- No AI API key is required.
 
 ### Install via Go
 
@@ -67,20 +68,19 @@ cd repox
 make install   # builds and copies to $(go env GOPATH)/bin/
 ```
 
-### Set API key
+### Offline-first setup
 
 ```bash
-# macOS / Linux — add to ~/.zshrc or ~/.bashrc
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Or set per-project in your IDE launch config
+repox init
+repox scan
+repox skill generate
 ```
 
 ---
 
 ## 🤖 MCP Setup (Claude Code · Copilot · Cursor)
 
-Repox runs as an MCP stdio server so AI tools can call it directly — no CLI needed.
+Repox runs as a local MCP stdio server so AI tools can call it directly. Repox itself never calls AI providers.
 
 ### Step 1 — Run in your project first
 
@@ -88,6 +88,7 @@ Repox runs as an MCP stdio server so AI tools can call it directly — no CLI ne
 cd /your/flutter-project
 repox init    # creates .repox/
 repox scan    # detects conventions → .repox/conventions.json
+repox skill generate
 ```
 
 ### Step 2 — Add to your AI tool
@@ -102,16 +103,13 @@ Add to `~/.claude.json`:
     "repox": {
       "type": "stdio",
       "command": "/Users/<you>/go/bin/repox",
-      "args": ["--mcp"],
-      "env": {
-        "ANTHROPIC_API_KEY": "sk-ant-..."
-      }
+      "args": ["--mcp"]
     }
   }
 }
 ```
 
-> **Tip:** Claude Code inherits your shell's `$PATH` and env, so if `repox` is already on your PATH and `ANTHROPIC_API_KEY` is exported you can omit the full path and `env` block.
+> **Tip:** Claude Code inherits your shell's `$PATH`, so if `repox` is already on your PATH you can use `"command": "repox"`.
 
 #### Claude Code (project-only)
 
@@ -181,12 +179,13 @@ graph LR
     A["👨‍💻 Developer"] -->|"repox generate feature X"| B["🧠 Repox CLI"]
     B --> C["📂 Load Conventions"]
     B --> D["🔍 Find Similar Features"]
-    B --> E["🤖 AI Generate"]
+    B --> E["🧩 Render Local Template"]
     E --> F["📝 Write Files"]
     F --> G["✅ Format & Validate"]
     G --> H["👨‍💻 Developer Reviews"]
     H -->|"commit & repox learn"| I["📚 Lessons Stored"]
-    I -->|"next generation"| B
+    I -->|"repox skill generate"| J["📜 Project Skill"]
+    J -->|"AI host reads/uses"| B
 
     style A fill:#2d3748,stroke:#4fd1c5,color:#fff
     style B fill:#2d3748,stroke:#f6ad55,color:#fff
@@ -204,6 +203,7 @@ graph TB
         CMD_INIT["init"]
         CMD_SCAN["scan"]
         CMD_GEN["generate"]
+        CMD_SKILL["skill generate"]
         CMD_LEARN["learn"]
     end
 
@@ -211,50 +211,44 @@ graph TB
         SCANNER["Scanner"]
         GENERATOR["Generator"]
         RETRIEVER["Example Retriever"]
+        SKILL["Project Skill Builder"]
         LEARNER["Learner"]
     end
 
-    subgraph AI_LAYER ["🤖 AI Layer"]
-        PROMPT["Prompt Builder"]
-        CLIENT["AI Client"]
-        PARSER["Response Parser"]
+    subgraph LOCAL_AI_HOST ["🤖 AI Host"]
+        COPILOT["Copilot Enterprise"]
+        MCP["Repox MCP Tools"]
     end
 
-    subgraph STORAGE ["💾 Storage (.repo-brain/)"]
+    subgraph STORAGE ["💾 Storage (.repox/)"]
         CONV["conventions.json"]
         EXAMPLES["examples.json"]
         LESSONS["lessons.json"]
         GENS["generations.json"]
-    end
-
-    subgraph EXTERNAL ["🔌 External"]
-        CTX["ctx-saver MCP"]
-        ANTHROPIC["Anthropic API"]
+        SKILLMD["skill/SKILL.md"]
     end
 
     CMD_SCAN --> SCANNER
     CMD_GEN --> GENERATOR
     CMD_GEN --> RETRIEVER
+    CMD_SKILL --> SKILL
     CMD_LEARN --> LEARNER
 
     SCANNER --> CONV
     RETRIEVER --> EXAMPLES
     LEARNER --> LESSONS
     GENERATOR --> GENS
+    SKILL --> SKILLMD
 
-    GENERATOR --> PROMPT
-    PROMPT --> CLIENT
-    CLIENT --> ANTHROPIC
-    CLIENT --> PARSER
-
-    RETRIEVER --> CTX
-    PROMPT --> CTX
+    COPILOT --> MCP
+    MCP --> SCANNER
+    MCP --> GENERATOR
+    MCP --> RETRIEVER
 
     style CLI fill:#1a202c,stroke:#4fd1c5,color:#fff
     style CORE fill:#1a202c,stroke:#f6ad55,color:#fff
-    style AI_LAYER fill:#1a202c,stroke:#fc8181,color:#fff
+    style LOCAL_AI_HOST fill:#1a202c,stroke:#fc8181,color:#fff
     style STORAGE fill:#1a202c,stroke:#68d391,color:#fff
-    style EXTERNAL fill:#1a202c,stroke:#b794f4,color:#fff
 ```
 
 ---
@@ -264,23 +258,24 @@ graph TB
 ```mermaid
 sequenceDiagram
     actor Dev as Developer
+    participant Host as AI Host (Copilot Enterprise)
+    participant MCP as Repox MCP
     participant CLI as Repox CLI
     participant Scanner as Scanner
     participant Retriever as Example Retriever
-    participant CTX as ctx-saver MCP
-    participant AI as AI (Claude)
     participant FS as File System
 
-    Dev->>CLI: repox generate feature watchlist --ai
+    Dev->>CLI: repox scan && repox skill generate
+    CLI->>Scanner: Detect conventions and examples
+    CLI->>FS: Write .repox/skill/SKILL.md and Copilot instructions
+    Dev->>Host: Create feature watchlist
+    Host->>MCP: repox_find_similar(watchlist)
+    MCP->>Retriever: Find similar local features
+    Retriever-->>MCP: Top examples
+    Host->>MCP: repox_generate(watchlist)
     CLI->>Scanner: Load conventions.json
     Scanner-->>CLI: Conventions
-    CLI->>Retriever: Find similar features
-    Retriever->>CTX: Check cached examples
-    CTX-->>Retriever: Cached summaries
-    Retriever-->>CLI: Top 3 examples
-    CLI->>AI: Prompt (conventions + examples + lessons)
-    AI-->>CLI: Structured JSON (files + content)
-    CLI->>FS: Write generated files
+    MCP->>FS: Write scaffold files
     CLI->>FS: Run formatter
     CLI-->>Dev: ✅ Feature scaffold ready!
 
@@ -288,9 +283,9 @@ sequenceDiagram
 
     Dev->>CLI: repox learn
     CLI->>FS: Read git diff
-    CLI->>AI: Analyze diff → extract lessons
-    AI-->>CLI: New lessons
+    CLI->>CLI: Extract local lessons
     CLI->>FS: Update lessons.json
+    Dev->>CLI: repox skill generate
     CLI-->>Dev: 📚 Lessons saved for next generation
 ```
 
@@ -300,7 +295,7 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    A["🤖 AI Generate Scaffold"] --> B["📝 Developer Edits Code"]
+    A["🧩 Repox Generates Scaffold"] --> B["📝 Developer Edits Code"]
     B --> C["💾 Git Commit"]
     C --> D["🔍 repox learn"]
     D --> E["📊 Diff Analysis"]
@@ -308,7 +303,7 @@ graph TD
     F --> G{"Dev Approves?"}
     G -->|Yes| H["✅ Save to lessons.json"]
     G -->|No| I["❌ Reject"]
-    H --> J["🧠 Better Generation Next Time"]
+    H --> J["📜 Regenerate Project Skill"]
     J --> A
 
     style A fill:#4fd1c5,stroke:#2d3748,color:#1a202c
@@ -331,7 +326,8 @@ repox/
 │   │   ├── root.go                 # Root command, --version
 │   │   ├── init.go                 # repox init
 │   │   ├── scan.go                 # repox scan          ✅ v0.2.0
-│   │   └── generate.go             # repox generate
+│   │   ├── generate.go             # repox generate
+│   │   └── skill.go                # repox skill generate
 │   ├── scanner/                    #                     ✅ v0.2.0
 │   │   ├── scanner.go              # Scanner interface
 │   │   ├── flutter_scanner.go      # Flutter orchestrator
@@ -353,14 +349,9 @@ repox/
 │   ├── learner/                    #                     ✅ v0.5.0
 │   │   ├── learner.go              # Learner interface
 │   │   ├── diff_reader.go          # Compare snapshots vs current files
-│   │   ├── lesson_extractor.go     # AI-powered lesson extraction
 │   │   └── learner_test.go         # Tests
-│   ├── ai/                         #                     ✅ v0.4.0
-│   │   ├── client.go               # Client + Caller interfaces
-│   │   ├── anthropic.go            # Anthropic API (raw HTTP)
-│   │   ├── prompt_builder.go       # Prompt assembly with token budget
-│   │   ├── response_parser.go      # JSON response parser
-│   │   └── ai_test.go              # Tests
+│   ├── skill/                      #                     ✅ v0.4.0
+│   │   └── generator.go            # Project skill and Copilot instruction builder
 │   ├── mcp/                        #                     ✅ v1.0.0
 │   │   ├── server.go               # MCP server setup (mark3labs/mcp-go)
 │   │   ├── tools.go                # Tool schemas
@@ -370,7 +361,7 @@ repox/
 │   │   └── loader.go               # Generic Load[T]/Save[T], defaults
 │   └── models/
 │       ├── convention.go           # Convention, NamingConvention, RoutingConfig
-│       ├── config.go               # Config, AIConfig
+│       ├── config.go               # Config
 │       ├── example.go              # Example
 │       ├── lesson.go               # Lesson
 │       └── generation.go           # Generation log
@@ -410,14 +401,11 @@ repox/
   "project_type": "flutter",
   "feature_root": "lib/features",
   "test_root": "test/features",
-  "default_template": "flutter_bloc_feature",
-  "ai": {
-    "provider": "anthropic",
-    "generation_model": "claude-sonnet-4-20250514",
-    "learning_model": "claude-haiku-4-5-20251001"
-  }
+  "default_template": "flutter_bloc_feature"
 }
 ```
+
+Repox is offline-only. It has no public/external AI provider integration.
 
 ### `.repox/conventions.json`
 
@@ -502,10 +490,21 @@ Similar features found:
 10 created, 0 skipped
 ```
 
+### `repox skill generate`
+
+```bash
+$ repox skill generate
+wrote .repox/skill/SKILL.md
+wrote .github/copilot-instructions.md
+```
+
+The generated skill teaches Copilot Enterprise or another AI host how to use Repox MCP tools for this repository.
+
 ---
 
 ## 🛡️ Safety
 
+- Offline-only: Repox has no external AI provider integration
 - Never sends secrets (`.env`, keys, certificates) to AI
 - `--dry-run` mode to preview before writing
 - No overwrite without `--force`
@@ -552,28 +551,27 @@ Similar features found:
 - ✅ `repox scan` indexes features → `.repox/examples.json`
 - ✅ `--with-examples` flag prints similar features before generating
 
-### v0.4.0 — AI-Assisted Generation
+### v0.4.0 — Project Skill Generator
 
-> Goal: `repox generate feature X --ai` ให้ AI generate code ตาม convention จริง
+> Goal: `repox skill generate` สร้าง skill ให้ Copilot Enterprise / AI host ใช้ Repox เอง
 
-- AI provider abstraction (Anthropic as default)
-- Prompt builder (conventions + examples + lessons)
-- Structured JSON response parsing
-- Token budget control via ctx-saver
-- Model selection: Sonnet (default) / Opus (`--opus`)
-- Formatter & analyzer integration
-- `--diff` mode to preview changes
+- Generate `.repox/skill/SKILL.md`
+- Generate `.github/copilot-instructions.md` for Copilot Enterprise
+- Include conventions, examples, approved lessons, and MCP workflow
+- Offline/public-AI policy included in generated instructions
+- Protect human-authored Copilot instructions unless `--force`
 
-### v0.5.0 — Self-Learning Loop
+### v0.5.0 — Offline Self-Learning Loop
 
 > Goal: `repox learn` เรียนรู้จาก diff หลัง dev แก้ code
 
 - Store generation snapshots
 - Git diff reader (generated vs committed)
-- Lesson extraction via AI (Haiku)
+- Local lesson extraction from changed files
 - Lesson approve / reject workflow
 - Confidence scoring & dedup
-- Inject lessons into next generation prompt
+- Inject approved lessons into the next generated skill
+- Future: suggest template patches from repeated local edits
 
 ### ✅ v1.0.0 — MCP Server Mode _(released 2026-05-09)_
 
@@ -601,9 +599,9 @@ Similar features found:
 | Tool | Parameters | Description |
 |---|---|---|
 | `repox_scan` | `project_override?` | Scan repo, detect conventions, index features → saves `.repox/conventions.json` |
-| `repox_generate` | `feature_name`, `use_ai?`, `use_examples?`, `force?`, `dry_run?` | Generate feature scaffold (template or AI mode) |
+| `repox_generate` | `feature_name`, `use_examples?`, `force?`, `dry_run?` | Generate deterministic local scaffold |
 | `repox_find_similar` | `feature_name`, `top_n?` | Find structurally similar existing features (default top 3) |
-| `repox_learn` | `generation_id?`, `auto_approve?` | Returns CLI usage hint — run `repox learn` in terminal for full flow |
+| `repox_learn` | `generation_id?`, `auto_approve?` | Returns CLI usage hint; run `repox learn` then `repox skill generate` in terminal |
 | `repox_explain_convention` | — | Return repo conventions in human-readable format |
 
 Works with: **Claude Code** · **GitHub Copilot (VS Code)** · **Cursor**

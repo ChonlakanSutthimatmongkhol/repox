@@ -22,7 +22,7 @@ type DiffResult struct {
 // ReadDiffs compares the snapshot of a generation with the current files on disk.
 func ReadDiffs(generation models.Generation, baseDir string) ([]DiffResult, error) {
 	if generation.SnapshotDir == "" {
-		return nil, fmt.Errorf("learner: generation %q has no snapshot (was it generated with --ai?)", generation.ID)
+		return nil, fmt.Errorf("learner: generation %q has no snapshot", generation.ID)
 	}
 
 	var results []DiffResult
@@ -67,7 +67,8 @@ func unifiedDiff(path, original, modified string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "--- a/%s\n+++ b/%s\n", path, path)
 
-	// Simple diff: show removed then added lines (not a true LCS diff, but sufficient for AI consumption)
+	// Simple diff: show removed then added lines. This is intentionally conservative
+	// because lessons are reviewed and stored locally.
 	maxLen := len(origLines)
 	if len(modLines) > maxLen {
 		maxLen = len(modLines)

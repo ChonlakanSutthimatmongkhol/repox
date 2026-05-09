@@ -10,7 +10,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/ChonlakanSutthimatmongkhol/repox/internal/ai"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/generator"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
@@ -73,8 +72,6 @@ func handleGenerate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	if featureName == "" {
 		return callError(fmt.Errorf("feature_name is required"))
 	}
-	useAI := optionalBool(args, "use_ai")
-	useExamples := optionalBool(args, "use_examples")
 	force := optionalBool(args, "force")
 	dryRun := optionalBool(args, "dry_run")
 
@@ -95,56 +92,10 @@ func handleGenerate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	var files []generator.GeneratedFile
 	genMode := "template"
 
-	if useAI {
-		genMode = "ai"
-		apiKey := os.Getenv("ANTHROPIC_API_KEY")
-		if apiKey == "" {
-			return callError(fmt.Errorf("set ANTHROPIC_API_KEY environment variable"))
-		}
-
-		tplGen := generator.NewTemplateGenerator()
-		tplFiles, err := tplGen.Generate(featureName, tmplName, &conv)
-		if err != nil {
-			return callError(err)
-		}
-		targetPaths := make([]string, len(tplFiles))
-		for i, f := range tplFiles {
-			targetPaths[i] = f.Path
-		}
-
-		var examples []models.Example
-		if useExamples {
-			examples, _ = config.Load[[]models.Example](config.RepoxPath("examples.json"))
-			if len(examples) == 0 {
-				examples, _ = retriever.IndexFeatures(cwd, &conv)
-			}
-		}
-		similar := retriever.FindSimilar(featureName, examples, 3)
-		lessons, _ := config.Load[[]models.Lesson](config.RepoxPath("lessons.json"))
-
-		client := ai.NewAnthropicClient(apiKey, cfg.AI.GenerationModel)
-		aiResp, err := client.Generate(ai.GenerateRequest{
-			FeatureName:    featureName,
-			Conventions:    &conv,
-			Examples:       similar,
-			Lessons:        lessons,
-			TargetFiles:    targetPaths,
-			TargetTemplate: tmplName,
-			RootDir:        cwd,
-		})
-		if err != nil {
-			return callError(err)
-		}
-		files = make([]generator.GeneratedFile, len(aiResp.Files))
-		for i, f := range aiResp.Files {
-			files[i] = generator.GeneratedFile{Path: f.Path, Content: f.Content}
-		}
-	} else {
-		gen := generator.NewTemplateGenerator()
-		files, err = gen.Generate(featureName, tmplName, &conv)
-		if err != nil {
-			return callError(err)
-		}
+	gen := generator.NewTemplateGenerator()
+	files, err = gen.Generate(featureName, tmplName, &conv)
+	if err != nil {
+		return callError(err)
 	}
 
 	if dryRun {
@@ -176,10 +127,7 @@ func handleGenerate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	}
 
 	genID := fmt.Sprintf("gen_%d", time.Now().Unix())
-	snapDir := ""
-	if genMode == "ai" {
-		snapDir = saveSnapshotMCP(genID, files, cwd)
-	}
+	snapDir := saveSnapshotMCP(genID, files, cwd)
 	existing, _ := config.Load[[]models.Generation](config.RepoxPath("generations.json"))
 	existing = append(existing, models.Generation{
 		ID: genID, FeatureName: featureName, Template: tmplName,
@@ -258,7 +206,7 @@ func handleFindSimilar(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 }
 
 func handleLearn(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return callResult("repox learn is available via CLI: `repox learn [--from <gen_id>] [--approve] [--list]`\n\nLesson extraction requires API access and interactive review — run it from the terminal.")
+	return callResult("repox learn is available via CLI: `repox learn [--from <gen_id>] [--approve] [--list]`\n\nOffline learning reads local generation snapshots and developer edits, then stores approved lessons in .repox/lessons.json. Run `repox skill generate` afterward to refresh the project skill.")
 }
 
 func handleExplainConvention(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {

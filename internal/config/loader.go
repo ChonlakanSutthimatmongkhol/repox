@@ -48,11 +48,6 @@ func DefaultConfig() models.Config {
 		FeatureRoot:     "lib/features",
 		TestRoot:        "test/features",
 		DefaultTemplate: "flutter_bloc_feature",
-		AI: models.AIConfig{
-			Provider:        "anthropic",
-			GenerationModel: "claude-sonnet-4-6",
-			LearningModel:   "claude-haiku-4-5-20251001",
-		},
 	}
 }
 

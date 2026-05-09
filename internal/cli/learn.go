@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ChonlakanSutthimatmongkhol/repox/internal/ai"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/learner"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
@@ -25,7 +24,7 @@ var (
 var learnCmd = &cobra.Command{
 	Use:   "learn",
 	Short: "Learn from developer edits to generated code",
-	Long:  "Compares the latest AI-generated scaffold with current files, extracts reusable lessons, and saves them for future generations.",
+	Long:  "Compares the latest generated scaffold with current files, extracts reusable local lessons, and saves them for future skill generation.",
 	RunE:  runLearn,
 }
 
@@ -137,7 +136,7 @@ func runLearnExtract(cmd *cobra.Command) error {
 	// Load generations
 	generations, err := config.Load[[]models.Generation](config.RepoxPath("generations.json"))
 	if err != nil || len(generations) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No generations found. Run `repox generate --ai` first.")
+		fmt.Fprintln(cmd.OutOrStdout(), "No generations found. Run `repox generate feature <name>` first.")
 		return nil
 	}
 
@@ -158,7 +157,7 @@ func runLearnExtract(cmd *cobra.Command) error {
 	}
 
 	if gen.SnapshotDir == "" {
-		fmt.Fprintln(cmd.OutOrStdout(), "Generation has no snapshot (only AI-mode generations are tracked). Use `repox generate --ai` to create a trackable generation.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Generation has no snapshot. Generate the feature again with the current Repox version to create a trackable generation.")
 		return nil
 	}
 
@@ -180,24 +179,8 @@ func runLearnExtract(cmd *cobra.Command) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Found %d changed file(s) since generation %s.\n", changed, gen.ID)
 
-	// Set up AI caller
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
-	if apiKey == "" {
-		return fmt.Errorf("set ANTHROPIC_API_KEY environment variable")
-	}
-
-	cfg, _ := config.Load[models.Config](config.RepoxPath("config.json"))
-	model := cfg.AI.LearningModel
-	if model == "" {
-		model = "claude-haiku-4-5-20251001"
-	}
-	caller := ai.NewAnthropicClient(apiKey, model)
-
-	// Extract lessons
-	candidates, err := learner.ExtractLessons(diffs, gen.ID, gen.FeatureName, gen.Template, caller)
-	if err != nil {
-		return fmt.Errorf("learn: %w", err)
-	}
+	candidates := extractLocalLessons(diffs, gen)
+	fmt.Fprintln(cmd.OutOrStdout(), "Extracted local review lessons from changed files.")
 	if len(candidates) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No lessons extracted.")
 		return nil
@@ -232,6 +215,28 @@ func runLearnExtract(cmd *cobra.Command) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Lessons saved to .repox/lessons.json (%d total).\n", len(merged))
 	return nil
+}
+
+func extractLocalLessons(diffs []learner.DiffResult, gen models.Generation) []models.Lesson {
+	var lessons []models.Lesson
+	for _, d := range diffs {
+		if !d.Changed {
+			continue
+		}
+		lessons = append(lessons, models.Lesson{
+			ID:         fmt.Sprintf("lesson_%s_%d", gen.ID, len(lessons)),
+			Scope:      gen.Template,
+			Lesson:     fmt.Sprintf("Developer edited `%s` after scaffold generation; review the current file before evolving the template.", d.Path),
+			Confidence: 0.4,
+			Approved:   false,
+			Source: models.LessonSource{
+				GenerationID: gen.ID,
+				Feature:      gen.FeatureName,
+				DetectedFrom: "local_diff",
+			},
+		})
+	}
+	return lessons
 }
 
 // dedupLessons merges new lessons into existing, skipping near-duplicates.
