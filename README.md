@@ -6,7 +6,7 @@
 
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Version](https://img.shields.io/badge/Version-v1.0.6-blue?style=flat)
+![Version](https://img.shields.io/badge/Version-v1.0.7-blue?style=flat)
 
 ---
 
@@ -448,173 +448,35 @@ Repox is offline-only. It has no public/external AI provider integration.
 
 ---
 
-## 📦 Usage Examples
+## 📦 Commands
 
-### `repox scan`
+| Command | Description |
+|---------|-------------|
+| `repox init` | Initialize `.repox/` in your project |
+| `repox scan` | Scan repo and save conventions, feature anatomy, and examples to `.repox/` |
+| `repox plan feature <name>` | Preview what would be generated without writing files |
+| `repox plan feature <name> --like <existing>` | Preview using an existing feature as the shape reference |
+| `repox generate feature <name>` | Generate a feature scaffold using scanned conventions |
+| `repox generate feature <name> --like <existing>` | Generate using an existing feature's structure and base classes |
+| `repox generate feature <name> --roles bloc,event,state,screen` | Generate only the selected role files |
+| `repox generate feature <name> --dry-run` | Preview file paths without writing |
+| `repox generate feature <name> --force` | Overwrite existing files |
+| `repox generate feature <name> --with-examples` | Show similar existing features before generating |
+| `repox learn` | Learn from reviewed local edits to improve future generations |
+| `repox learn --list` | List recorded generations |
+| `repox skill generate` | Generate a project skill file for Copilot Enterprise / AI hosts |
+| `repox --mcp` | Start as a local MCP server (Claude Code / Copilot / Cursor) |
+| `repox --version` | Print current version |
 
-```bash
-$ repox scan
-Scanned repository:
-  Project type:      flutter
-  State management:  flutter_bloc
-  Feature root:      lib/features
-  Feature structure: clean_architecture
-  Test root:         test/features
-  Naming:
-    Screen suffix:   Screen
-    Bloc suffix:     Bloc
-    Event suffix:    Event
-    State suffix:    State
-  Routing:           go_router (lib/router/app_router.dart)
-  Common imports:    5 detected
+### `--like` flag
 
-Conventions saved to .repox/conventions.json
-```
+`--like <existing-feature>` uses a scanned feature as a shape reference:
 
-`repox scan` also records nested feature flows and role anatomy in `.repox/conventions.json`, including file routes, base classes, methods, imports, constructor dependencies, and capabilities such as `analytics`, `firebase_tracking`, `base_bloc`, and `route_model`.
-
-Example nested flow memory:
-
-```json
-{
-  "path": "lib/features/investment/fund_list",
-  "files": {
-    "bloc": "lib/features/investment/fund_list/presentation/fund_list_bloc.dart",
-    "screen": "lib/features/investment/fund_list/presentation/fund_list_screen.dart"
-  },
-  "file_routes": {
-    "bloc": "presentation",
-    "screen": "presentation"
-  },
-  "anatomy": {
-    "bloc": {
-      "base_classes": ["BaseBloc"],
-      "methods": ["_trackLandingEvent"],
-      "capabilities": ["analytics", "firebase_tracking"]
-    }
-  }
-}
-```
-
-### `repox plan feature investment/new_feature --like investment/fund_list`
-
-Preview what Repox would generate before writing files. `--like` uses an existing scanned feature as the shape reference.
-
-```bash
-$ repox plan feature investment/new_feature --like investment/fund_list
-Feature plan: investment/new_feature
-  Pattern: clean_architecture
-  Like:    investment/fund_list
-  Roles:   bloc, event, screen, state
-
-Files:
-  - lib/features/investment/new_feature/presentation/new_feature_bloc.dart
-  - lib/features/investment/new_feature/presentation/new_feature_event.dart
-  - lib/features/investment/new_feature/presentation/new_feature_screen.dart
-  - lib/features/investment/new_feature/presentation/new_feature_state.dart
-
-Role anatomy hints:
-  - bloc: base BaseBloc; methods _trackLandingEvent; capabilities analytics, firebase_tracking
-  - screen: base BaseStatefulWidget; methods build, createState
-```
-
-### `repox generate feature payments --with-examples`
-
-```
-Similar features found:
-  - home (lib/features/home)
-  - profile (lib/features/profile)
-
-  created lib/features/payments/payments_bloc.dart
-  ...
-```
-
-### `repox generate feature watchlist`
-
-```
-  created lib/features/watchlist/watchlist_bloc.dart
-  created lib/features/watchlist/watchlist_event.dart
-  created lib/features/watchlist/watchlist_state.dart
-  created lib/features/watchlist/watchlist_screen.dart
-  created lib/features/watchlist/watchlist_repository.dart
-  created lib/features/watchlist/watchlist_repository_impl.dart
-  created lib/features/watchlist/watchlist_usecase.dart
-  created lib/features/watchlist/watchlist_request.dart
-  created lib/features/watchlist/watchlist_response.dart
-  created test/features/watchlist/watchlist_bloc_test.dart
-
-10 created, 0 skipped
-```
-
-### `repox generate feature investment/new_feature --roles bloc,event,state,screen`
-
-Generate only the selected role files. This is useful when a flow does not need repository/usecase/model files.
-
-```bash
-$ repox generate feature investment/new_feature --roles bloc,event,state,screen --dry-run
-Dry run — no files written:
-  lib/features/investment/new_feature/presentation/new_feature_bloc.dart
-  lib/features/investment/new_feature/presentation/new_feature_event.dart
-  lib/features/investment/new_feature/presentation/new_feature_screen.dart
-  lib/features/investment/new_feature/presentation/new_feature_state.dart
-```
-
-### `repox generate feature investment/new_feature --like investment/fund_list`
-
-Reuse an existing feature flow's structure, roles, file routes, and base classes.
-
-- Cross-feature imports are stripped automatically — no leaking business logic from the source feature
-- Base classes (`BaseBlocScreen`, `BaseStatefulWidget`) are detected from the source feature's anatomy and applied to the generated templates
-- The bloc constructor is pre-wired with the generated UseCase dependency
-- A **Next steps** checklist is printed after generation so the developer knows exactly what to wire up
-
-```bash
-$ repox generate feature investment/watchlist --like investment/fund_list
-  created lib/features/investment/watchlist/presentation/watchlist_bloc.dart
-  created lib/features/investment/watchlist/presentation/watchlist_event.dart
-  created lib/features/investment/watchlist/domain/repositories/watchlist_repository.dart
-  created lib/features/investment/watchlist/data/repositories/watchlist_repository_impl.dart
-  created lib/features/investment/watchlist/data/models/request/watchlist_request.dart
-  created lib/features/investment/watchlist/data/models/response/watchlist_response.dart
-  created lib/features/investment/watchlist/presentation/watchlist_screen.dart
-  created lib/features/investment/watchlist/presentation/watchlist_state.dart
-  created lib/features/investment/watchlist/domain/usecase/watchlist_usecase.dart
-
-9 created, 0 skipped
-
-Next steps:
-  1. Register in service locator:
-       sl.registerFactory(() => WatchlistUseCase(sl()))
-       sl.registerFactory(() => WatchlistBloc(sl()))
-  2. Bind repository in service locator:
-       sl.registerLazySingleton<WatchlistRepository>(() => WatchlistRepositoryImpl(sl()))
-  3. Add route in router:
-       GoRoute(path: '/watchlist', builder: (_, __) => BlocProvider(create: (_) => sl<WatchlistBloc>(), child: const WatchlistScreen()))
-  4. Implement fetch() in WatchlistRepositoryImpl
-```
-
-The generated `watchlist_bloc.dart` automatically uses the project's base class and injects the UseCase:
-
-```dart
-class WatchlistBloc extends BaseBlocScreen<WatchlistEvent, WatchlistState> {
-  WatchlistBloc(this._watchlistUseCase) : super(const WatchlistInitial()) {
-    on<WatchlistStarted>(_onStarted);
-  }
-
-  final WatchlistUseCase _watchlistUseCase;
-  // ...
-}
-```
-
-### `repox skill generate`
-
-```bash
-$ repox skill generate
-wrote .repox/skill/SKILL.md
-wrote .github/copilot-instructions.md
-```
-
-The generated skill teaches Copilot Enterprise or another AI host how to use Repox MCP tools for this repository.
+- Generates only the roles that exist in the source feature
+- Applies the source feature's base classes (e.g. `BaseBlocScreen`, `BaseStatefulWidget`) from scanned anatomy
+- Pre-wires the UseCase into the bloc constructor
+- Prints a **Next steps** checklist (DI registration, route, repository) after generation
+- Ancillary files with no template (enums, route models, skeleton widgets) are copied and renamed from source
 
 ---
 
@@ -707,15 +569,16 @@ The generated skill teaches Copilot Enterprise or another AI host how to use Rep
 - ✅ `repox generate feature --roles bloc,event,state,screen`
 - ✅ `repox generate feature --like investment/fund_list`
 
-### ✅ v1.0.6 — Smart `--like` Generation _(released 2026-05-10)_
+### ✅ v1.0.7 — Smart `--like` Generation _(released 2026-05-10)_
 
 > Goal: `--like` generates clean, project-aware scaffolds — not copies of business logic
 
-- ✅ Cross-feature import stripping: imports from other feature modules are removed automatically
-- ✅ Base class propagation: bloc and screen templates use the source feature's actual base classes (`BaseBlocScreen`, `BaseStatefulWidget`) detected from scanned anatomy
+- ✅ Template-first for known roles: bloc, screen, event, state always use clean stubs — no source business logic copied
+- ✅ Base class propagation: templates use base classes from scanned anatomy (`BaseBlocScreen`, `BaseStatefulWidget`)
 - ✅ UseCase auto-injection: the generated bloc constructor is pre-wired with the generated UseCase
 - ✅ Post-generate **Next steps** checklist: DI registration, route, and repository implementation hints printed after each generation
-- ✅ Scanner depth-aware role assignment: primary roles (screen, bloc) always go to the shallowest file — fixes nested subdirectory files (e.g. `firebase/`) stealing the primary role
+- ✅ Scanner depth-aware role assignment: primary roles always go to the shallowest file — fixes nested files (e.g. `firebase/`) stealing the primary role
+- ✅ Ancillary files (enums, route models, skeleton widgets) still copy-rename from source
 
 ### v1.x — Future
 
