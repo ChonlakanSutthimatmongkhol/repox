@@ -21,16 +21,25 @@ repox init
 # 2. Scan and detect conventions automatically
 repox scan
 
-# 3. Generate a feature scaffold matching your conventions
+# 3. Preview an anatomy-aware generation plan
+repox plan feature investment/new_feature --like investment/fund_list
+
+# 4. Generate a feature scaffold matching your conventions
 repox generate feature watchlist
 
-# 4. Preview without writing
+# 5. Preview without writing
 repox generate feature watchlist --dry-run
 
-# 5. Find similar existing features before generating
+# 6. Generate only selected role files
+repox generate feature investment/new_feature --roles bloc,event,state,screen
+
+# 7. Reuse the shape of an existing feature flow
+repox generate feature investment/new_feature --like investment/fund_list
+
+# 8. Find similar existing features before generating
 repox generate feature watchlist --with-examples
 
-# 6. Generate a project skill for Copilot Enterprise / AI hosts
+# 9. Generate a project skill for Copilot Enterprise / AI hosts
 repox skill generate
 
 repox learn       # Learn from reviewed local edits
@@ -462,6 +471,53 @@ Scanned repository:
 Conventions saved to .repox/conventions.json
 ```
 
+`repox scan` also records nested feature flows and role anatomy in `.repox/conventions.json`, including file routes, base classes, methods, imports, constructor dependencies, and capabilities such as `analytics`, `firebase_tracking`, `base_bloc`, and `route_model`.
+
+Example nested flow memory:
+
+```json
+{
+  "path": "lib/features/investment/fund_list",
+  "files": {
+    "bloc": "lib/features/investment/fund_list/presentation/fund_list_bloc.dart",
+    "screen": "lib/features/investment/fund_list/presentation/fund_list_screen.dart"
+  },
+  "file_routes": {
+    "bloc": "presentation",
+    "screen": "presentation"
+  },
+  "anatomy": {
+    "bloc": {
+      "base_classes": ["BaseBloc"],
+      "methods": ["_trackLandingEvent"],
+      "capabilities": ["analytics", "firebase_tracking"]
+    }
+  }
+}
+```
+
+### `repox plan feature investment/new_feature --like investment/fund_list`
+
+Preview what Repox would generate before writing files. `--like` uses an existing scanned feature as the shape reference.
+
+```bash
+$ repox plan feature investment/new_feature --like investment/fund_list
+Feature plan: investment/new_feature
+  Pattern: clean_architecture
+  Like:    investment/fund_list
+  Roles:   bloc, event, screen, state
+
+Files:
+  - lib/features/investment/new_feature/presentation/new_feature_bloc.dart
+  - lib/features/investment/new_feature/presentation/new_feature_event.dart
+  - lib/features/investment/new_feature/presentation/new_feature_screen.dart
+  - lib/features/investment/new_feature/presentation/new_feature_state.dart
+
+Role anatomy hints:
+  - bloc: base BaseBloc; methods _trackLandingEvent; capabilities analytics, firebase_tracking
+  - screen: base BaseStatefulWidget; methods build, createState
+```
+
 ### `repox generate feature payments --with-examples`
 
 ```
@@ -488,6 +544,32 @@ Similar features found:
   created test/features/watchlist/watchlist_bloc_test.dart
 
 10 created, 0 skipped
+```
+
+### `repox generate feature investment/new_feature --roles bloc,event,state,screen`
+
+Generate only the selected role files. This is useful when a flow does not need repository/usecase/model files.
+
+```bash
+$ repox generate feature investment/new_feature --roles bloc,event,state,screen --dry-run
+Dry run — no files written:
+  lib/features/investment/new_feature/presentation/new_feature_bloc.dart
+  lib/features/investment/new_feature/presentation/new_feature_event.dart
+  lib/features/investment/new_feature/presentation/new_feature_screen.dart
+  lib/features/investment/new_feature/presentation/new_feature_state.dart
+```
+
+### `repox generate feature investment/new_feature --like investment/fund_list`
+
+Reuse an existing feature flow's structure, roles, and file routes.
+
+```bash
+$ repox generate feature investment/new_feature --like investment/fund_list --dry-run
+Dry run — no files written:
+  lib/features/investment/new_feature/presentation/new_feature_bloc.dart
+  lib/features/investment/new_feature/presentation/new_feature_event.dart
+  lib/features/investment/new_feature/presentation/new_feature_screen.dart
+  lib/features/investment/new_feature/presentation/new_feature_state.dart
 ```
 
 ### `repox skill generate`
@@ -581,8 +663,20 @@ The generated skill teaches Copilot Enterprise or another AI host how to use Rep
 - ✅ 5 tools: `repox_scan`, `repox_generate`, `repox_find_similar`, `repox_learn`, `repox_explain_convention`
 - ✅ Works with: Claude Code, GitHub Copilot, Cursor
 
+### ✅ v1.0.3 — Anatomy-Aware Planning _(released 2026-05-10)_
+
+> Goal: Repox เข้าใจ anatomy ของ role files และให้ user เลือก shape ก่อน generate
+
+- ✅ Nested feature flow memory, e.g. `lib/features/investment/fund_list`
+- ✅ Per-role file anatomy: base classes, methods, imports, constructor dependencies, capabilities
+- ✅ `repox plan feature <name-or-path>` preview with role anatomy hints
+- ✅ `repox generate feature --roles bloc,event,state,screen`
+- ✅ `repox generate feature --like investment/fund_list`
+
 ### v1.x — Future
 
+- Capability-aware template patches from scanned anatomy
+- Interactive role/capability picker
 - Go backend template (handler / service / repository)
 - Jira ticket → scaffold
 - API schema → DTO / service / repository
