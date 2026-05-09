@@ -270,10 +270,12 @@ func TestFlutterScanner_EmptyRepo(t *testing.T) {
 	assert.Equal(t, "lib/features", conv.FeatureRoot)
 }
 
-func TestGoScanner_NotImplemented(t *testing.T) {
+func TestGoScanner_MinimalDir(t *testing.T) {
 	s := &GoScanner{}
-	_, err := s.Scan(t.TempDir())
-	assert.Error(t, err)
+	conv, err := s.Scan(t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, "go", conv.ProjectType)
+	assert.Equal(t, "internal", conv.FeatureRoot)
 }
 
 func TestDetectNamingConventions_Repository(t *testing.T) {
@@ -305,11 +307,16 @@ func TestDetectCommonImports_Empty(t *testing.T) {
 var _ Scanner = (*FlutterScanner)(nil)
 var _ Scanner = (*GoScanner)(nil)
 
-// Verify GoScanner returns correct error
-func TestGoScanner_ErrorMessage(t *testing.T) {
+func TestGoScanner_WithGoMod(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/myapp\n\ngo 1.21\n")
+
 	s := &GoScanner{}
-	_, err := s.Scan(".")
-	assert.Contains(t, err.Error(), "not yet implemented")
+	conv, err := s.Scan(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "go", conv.ProjectType)
+	assert.Equal(t, "example.com/myapp", conv.ModulePath)
+	assert.Equal(t, "net/http", conv.Routing.Type)
 }
 
 func TestDetectNamingConventions_Usecase(t *testing.T) {

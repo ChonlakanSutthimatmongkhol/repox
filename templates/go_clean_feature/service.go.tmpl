@@ -1,0 +1,19 @@
+package {{.PackageName}}
+
+import "context"
+
+type {{.PascalName}}{{.ServiceSuffix}} interface {
+	Get(ctx context.Context, req *{{.PascalName}}Request) (*{{.PascalName}}Response, error)
+}
+
+type {{.PascalName}}{{.ServiceSuffix}}Impl struct {
+	repo {{.PascalName}}{{.RepositorySuffix}}
+}
+
+func New{{.PascalName}}{{.ServiceSuffix}}(repo {{.PascalName}}{{.RepositorySuffix}}) {{.PascalName}}{{.ServiceSuffix}} {
+	return &{{.PascalName}}{{.ServiceSuffix}}Impl{repo: repo}
+}
+
+func (s *{{.PascalName}}{{.ServiceSuffix}}Impl) Get(ctx context.Context, req *{{.PascalName}}Request) (*{{.PascalName}}Response, error) {
+	return s.repo.FindByID(ctx, req.ID)
+}

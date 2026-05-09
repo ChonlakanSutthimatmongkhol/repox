@@ -1,0 +1,14 @@
+package {{.PackageName}}
+
+import "context"
+
+type {{.PascalName}}{{.RepositorySuffix}}Impl struct{}
+
+func New{{.PascalName}}{{.RepositorySuffix}}() {{.PascalName}}{{.RepositorySuffix}} {
+	return &{{.PascalName}}{{.RepositorySuffix}}Impl{}
+}
+
+func (r *{{.PascalName}}{{.RepositorySuffix}}Impl) FindByID(ctx context.Context, id string) (*{{.PascalName}}Response, error) {
+	// TODO: implement
+	return nil, nil
+}

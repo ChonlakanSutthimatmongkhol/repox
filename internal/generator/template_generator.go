@@ -12,18 +12,31 @@ import (
 	repotmpl "github.com/ChonlakanSutthimatmongkhol/repox/templates"
 )
 
+// toGoPackageName converts a feature name to a valid Go package name
+// (lowercase, no underscores or hyphens).
+func toGoPackageName(featureName string) string {
+	s := ToSnakeCase(featureName)
+	s = strings.ReplaceAll(s, "_", "")
+	s = strings.ReplaceAll(s, "-", "")
+	return strings.ToLower(s)
+}
+
 // TemplateContext holds values passed to every scaffold template.
 type TemplateContext struct {
 	FeatureName      string
 	PascalName       string
 	CamelName        string
 	SnakeName        string
+	PackageName      string // Go: lowercase no-separator package name
+	ModulePath       string // Go: module path from go.mod
 	ScreenSuffix     string
 	BlocSuffix       string
 	EventSuffix      string
 	StateSuffix      string
 	RepositorySuffix string
 	UsecaseSuffix    string
+	HandlerSuffix    string // Go
+	ServiceSuffix    string // Go
 	CommonImports    []string
 	BlocImport       string
 	RepositoryImport string
@@ -92,7 +105,7 @@ func (g *TemplateGenerator) renderFile(tmplPath string, ctx TemplateContext) (st
 }
 
 // outputPath derives the destination file path from the template filename.
-// Template names follow the pattern: <kind>.dart.tmpl → <snakeName>_<kind>.dart
+// Template names follow the pattern: <kind>.<ext>.tmpl → <snakeName>_<kind>.<ext>
 func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) string {
 	base := filepath.Base(tmplPath)
 	// strip .tmpl extension
@@ -101,8 +114,8 @@ func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) s
 	// prefix with snake feature name
 	outName := ctx.SnakeName + "_" + name
 
-	// bloc_test.dart → test root, everything else → feature root
-	if strings.Contains(name, "test") {
+	// *_test.* → test root; for Go, TestRoot == FeatureRoot so tests stay alongside source.
+	if strings.Contains(kind, "test") {
 		return filepath.Join(conv.TestRoot, ctx.SnakeName, outName)
 	}
 	return filepath.Join(conv.FeatureRoot, ctx.SnakeName, routeForKind(conv, kind), outName)
@@ -114,12 +127,16 @@ func buildContext(featureName string, conv *models.Convention) TemplateContext {
 		PascalName:       ToPascalCase(featureName),
 		CamelName:        ToCamelCase(featureName),
 		SnakeName:        ToSnakeCase(featureName),
+		PackageName:      toGoPackageName(featureName),
+		ModulePath:       conv.ModulePath,
 		ScreenSuffix:     conv.Naming.ScreenSuffix,
 		BlocSuffix:       conv.Naming.BlocSuffix,
 		EventSuffix:      conv.Naming.EventSuffix,
 		StateSuffix:      conv.Naming.StateSuffix,
 		RepositorySuffix: conv.Naming.RepositorySuffix,
 		UsecaseSuffix:    conv.Naming.UsecaseSuffix,
+		HandlerSuffix:    conv.Naming.HandlerSuffix,
+		ServiceSuffix:    conv.Naming.ServiceSuffix,
 		CommonImports:    conv.CommonImports,
 	}
 }

@@ -8,6 +8,7 @@ type Convention struct {
 	FeatureStructure string           `json:"feature_structure"`
 	FeatureRoot      string           `json:"feature_root"`
 	TestRoot         string           `json:"test_root"`
+	ModulePath       string           `json:"module_path,omitempty"`
 	Naming           NamingConvention `json:"naming"`
 	Routing          RoutingConfig    `json:"routing"`
 	CommonImports    []string         `json:"common_imports"`
@@ -19,12 +20,14 @@ type Convention struct {
 type NamingConvention struct {
 	ClassCase        string `json:"class_case"`
 	FileCase         string `json:"file_case"`
-	ScreenSuffix     string `json:"screen_suffix"`
-	BlocSuffix       string `json:"bloc_suffix"`
-	EventSuffix      string `json:"event_suffix"`
-	StateSuffix      string `json:"state_suffix"`
-	RepositorySuffix string `json:"repository_suffix"`
-	UsecaseSuffix    string `json:"usecase_suffix"`
+	ScreenSuffix     string `json:"screen_suffix,omitempty"`
+	BlocSuffix       string `json:"bloc_suffix,omitempty"`
+	EventSuffix      string `json:"event_suffix,omitempty"`
+	StateSuffix      string `json:"state_suffix,omitempty"`
+	RepositorySuffix string `json:"repository_suffix,omitempty"`
+	UsecaseSuffix    string `json:"usecase_suffix,omitempty"`
+	HandlerSuffix    string `json:"handler_suffix,omitempty"`
+	ServiceSuffix    string `json:"service_suffix,omitempty"`
 }
 
 // RoutingConfig holds routing configuration.
