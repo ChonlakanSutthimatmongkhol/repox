@@ -227,6 +227,121 @@ func TestFeatureIndexer_FindSimilar(t *testing.T) {
 	assert.Len(t, result, 2)
 }
 
+// ── Go indexing ───────────────────────────────────────────────────────────────
+
+func goConv(featureRoot string) *models.Convention {
+	return &models.Convention{
+		ProjectType: "go",
+		FeatureRoot: featureRoot,
+		Naming: models.NamingConvention{
+			HandlerSuffix:    "Handler",
+			ServiceSuffix:    "Service",
+			RepositorySuffix: "Repository",
+		},
+	}
+}
+
+func buildGoFeature(t *testing.T, dir, featureName string) {
+	t.Helper()
+	base := filepath.Join(dir, featureName)
+	ginImport := "import (\n\t\"github.com/gin-gonic/gin\"\n)\n"
+	for _, f := range []string{
+		featureName + "_handler.go",
+		featureName + "_service.go",
+		featureName + "_repository.go",
+		featureName + "_repository_impl.go",
+	} {
+		writeFile(t, filepath.Join(base, f), "package "+featureName+"\n\n"+ginImport)
+	}
+	writeFile(t, filepath.Join(base, featureName+"_handler_test.go"), "package "+featureName+"_test\n")
+}
+
+func TestIndexFeatures_BasicGo(t *testing.T) {
+	dir := t.TempDir()
+	featureRoot := "internal"
+	buildGoFeature(t, filepath.Join(dir, featureRoot), "payment")
+	buildGoFeature(t, filepath.Join(dir, featureRoot), "order")
+
+	examples, err := IndexFeatures(dir, goConv(featureRoot))
+	require.NoError(t, err)
+	assert.Len(t, examples, 2)
+	assert.Equal(t, "order", examples[0].Name)
+	assert.Equal(t, "payment", examples[1].Name)
+}
+
+func TestIndexFeatures_GoDetectsMetadata(t *testing.T) {
+	dir := t.TempDir()
+	featureRoot := "internal"
+	buildGoFeature(t, filepath.Join(dir, featureRoot), "payment")
+
+	examples, err := IndexFeatures(dir, goConv(featureRoot))
+	require.NoError(t, err)
+	require.Len(t, examples, 1)
+
+	meta := examples[0].Metadata
+	assert.True(t, meta.HasHandler)
+	assert.True(t, meta.HasService)
+	assert.True(t, meta.HasRepository)
+	assert.True(t, meta.HasTest)
+	assert.False(t, meta.HasBloc)
+	assert.False(t, meta.HasScreen)
+}
+
+func TestIndexFeatures_GoDetectsPatterns(t *testing.T) {
+	dir := t.TempDir()
+	featureRoot := "internal"
+	content := "package payment\n\nimport (\n\t\"github.com/gin-gonic/gin\"\n\t\"gorm.io/gorm\"\n)\n"
+	writeFile(t, filepath.Join(dir, featureRoot, "payment", "payment_handler.go"), content)
+
+	examples, err := IndexFeatures(dir, goConv(featureRoot))
+	require.NoError(t, err)
+	require.Len(t, examples, 1)
+	assert.Contains(t, examples[0].Patterns, "uses gin")
+	assert.Contains(t, examples[0].Patterns, "uses gorm")
+}
+
+func TestIndexFeatures_GoFilesRoles(t *testing.T) {
+	dir := t.TempDir()
+	featureRoot := "internal"
+	buildGoFeature(t, filepath.Join(dir, featureRoot), "payment")
+
+	examples, err := IndexFeatures(dir, goConv(featureRoot))
+	require.NoError(t, err)
+	require.Len(t, examples, 1)
+
+	files := examples[0].Files
+	assert.Contains(t, files["handler"], "payment_handler.go")
+	assert.Contains(t, files["service"], "payment_service.go")
+	assert.Contains(t, files["repository"], "payment_repository.go")
+}
+
+func TestIndexFeatures_GoIgnoresTestFiles(t *testing.T) {
+	dir := t.TempDir()
+	featureRoot := "internal"
+	writeFile(t, filepath.Join(dir, featureRoot, "payment", "payment_handler.go"), "package payment\n")
+	writeFile(t, filepath.Join(dir, featureRoot, "payment", "payment_handler_test.go"), "package payment_test\n")
+
+	examples, err := IndexFeatures(dir, goConv(featureRoot))
+	require.NoError(t, err)
+	require.Len(t, examples, 1)
+
+	// test file should not appear as a role, but HasTest should be true
+	assert.NotContains(t, examples[0].Files, "handler_test")
+	assert.True(t, examples[0].Metadata.HasTest)
+}
+
+func TestIndexFeatures_GoCleanArchStructure(t *testing.T) {
+	dir := t.TempDir()
+	featureRoot := "internal"
+	writeFile(t, filepath.Join(dir, featureRoot, "payment", "delivery", "payment_handler.go"), "package delivery\n")
+	writeFile(t, filepath.Join(dir, featureRoot, "payment", "usecase", "payment_service.go"), "package usecase\n")
+
+	examples, err := IndexFeatures(dir, goConv(featureRoot))
+	require.NoError(t, err)
+	require.Len(t, examples, 1)
+	assert.Equal(t, "clean_architecture", examples[0].Metadata.Structure)
+}
+
 // ── helpers unit tests ────────────────────────────────────────────────────────
 
 func TestHasSuffix(t *testing.T) {
