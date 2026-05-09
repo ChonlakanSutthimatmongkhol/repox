@@ -109,6 +109,83 @@ func TestGenerateFeature_DryRun(t *testing.T) {
 	assert.Len(t, matches, 0, "dry-run should not write any files")
 }
 
+func TestGenerateFeature_RolesDryRun(t *testing.T) {
+	setupInitDir(t)
+
+	generateForce = false
+	generateDryRun = true
+	generateTemplate = ""
+	generatePattern = ""
+	generateRoles = "bloc,event,state,screen"
+	generateLike = ""
+	defer func() {
+		generateDryRun = false
+		generateRoles = ""
+	}()
+
+	buf := &bytes.Buffer{}
+	generateFeatureCmd.SetOut(buf)
+	err := runGenerateFeature(generateFeatureCmd, []string{"investment/new_feature"})
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "new_feature_bloc.dart")
+	assert.Contains(t, out, "new_feature_screen.dart")
+	assert.NotContains(t, out, "new_feature_repository.dart")
+	assert.NotContains(t, out, "new_feature_bloc_test.dart")
+}
+
+func TestGenerateFeature_LikeUsesFeatureShape(t *testing.T) {
+	setupInitDir(t)
+
+	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
+	require.NoError(t, err)
+	conv.FeatureStructure = "flat"
+	conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{
+		{
+			Name:      "fund_list",
+			Path:      "lib/features/investment/fund_list",
+			Parent:    "investment",
+			Structure: "clean_architecture",
+			Files: map[string]string{
+				"bloc":   "lib/features/investment/fund_list/presentation/fund_list_bloc.dart",
+				"event":  "lib/features/investment/fund_list/presentation/fund_list_event.dart",
+				"screen": "lib/features/investment/fund_list/presentation/fund_list_screen.dart",
+				"state":  "lib/features/investment/fund_list/presentation/fund_list_state.dart",
+			},
+			FileRoutes: map[string]string{
+				"bloc":   "presentation",
+				"event":  "presentation",
+				"screen": "presentation",
+				"state":  "presentation",
+			},
+		},
+	}
+	require.NoError(t, config.Save(config.RepoxPath("conventions.json"), conv))
+
+	generateForce = false
+	generateDryRun = true
+	generateTemplate = ""
+	generatePattern = ""
+	generateRoles = ""
+	generateLike = "investment/fund_list"
+	defer func() {
+		generateDryRun = false
+		generateLike = ""
+	}()
+
+	buf := &bytes.Buffer{}
+	generateFeatureCmd.SetOut(buf)
+	err = runGenerateFeature(generateFeatureCmd, []string{"investment/new_feature"})
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "lib/features/investment/new_feature/presentation/new_feature_bloc.dart")
+	assert.Contains(t, out, "lib/features/investment/new_feature/presentation/new_feature_screen.dart")
+	assert.NotContains(t, out, "new_feature_repository.dart")
+	assert.NotContains(t, out, "new_feature_bloc_test.dart")
+}
+
 func TestGenerateFeature_UsesRecommendedPatternFromScan(t *testing.T) {
 	dir := setupInitDir(t)
 

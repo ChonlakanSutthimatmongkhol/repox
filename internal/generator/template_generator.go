@@ -51,6 +51,11 @@ type GeneratedFile struct {
 	Content string
 }
 
+// GenerateOptions controls which template roles are rendered.
+type GenerateOptions struct {
+	Roles []string
+}
+
 // TemplateGenerator renders scaffold templates for a given feature.
 type TemplateGenerator struct {
 	fs fs.FS
@@ -63,6 +68,11 @@ func NewTemplateGenerator() *TemplateGenerator {
 
 // Generate renders all templates in templateName for the given feature and conventions.
 func (g *TemplateGenerator) Generate(featureName, templateName string, conv *models.Convention) ([]GeneratedFile, error) {
+	return g.GenerateWithOptions(featureName, templateName, conv, GenerateOptions{})
+}
+
+// GenerateWithOptions renders selected templates in templateName for the given feature and conventions.
+func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string, conv *models.Convention, opts GenerateOptions) ([]GeneratedFile, error) {
 	ctx := buildContext(featureName, conv)
 
 	pattern := filepath.Join(templateName, "*.tmpl")
@@ -74,8 +84,13 @@ func (g *TemplateGenerator) Generate(featureName, templateName string, conv *mod
 		return nil, fmt.Errorf("generator: no templates found for %q", templateName)
 	}
 
+	allowedRoles := roleSet(opts.Roles)
 	var out []GeneratedFile
 	for _, entry := range entries {
+		kind := templateKind(entry)
+		if len(allowedRoles) > 0 && !allowedRoles[kind] {
+			continue
+		}
 		outPath := outputPath(entry, ctx, conv)
 		fileCtx := ctx.withImportsFor(outPath, conv)
 		content, err := g.renderFile(entry, fileCtx)
@@ -85,6 +100,27 @@ func (g *TemplateGenerator) Generate(featureName, templateName string, conv *mod
 		out = append(out, GeneratedFile{Path: outPath, Content: content})
 	}
 	return out, nil
+}
+
+func templateKind(tmplPath string) string {
+	base := filepath.Base(tmplPath)
+	name := strings.TrimSuffix(base, ".tmpl")
+	return strings.TrimSuffix(name, filepath.Ext(name))
+}
+
+func roleSet(roles []string) map[string]bool {
+	if len(roles) == 0 {
+		return nil
+	}
+	allowed := map[string]bool{}
+	for _, role := range roles {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			continue
+		}
+		allowed[role] = true
+	}
+	return allowed
 }
 
 func (g *TemplateGenerator) renderFile(tmplPath string, ctx TemplateContext) (string, error) {

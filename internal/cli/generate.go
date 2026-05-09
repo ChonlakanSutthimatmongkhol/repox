@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -22,6 +24,8 @@ var (
 	generateTemplate     string
 	generatePattern      string
 	generateWithExamples bool
+	generateRoles        string
+	generateLike         string
 )
 
 var generateCmd = &cobra.Command{
@@ -42,6 +46,8 @@ func init() {
 	generateFeatureCmd.Flags().StringVarP(&generateTemplate, "template", "t", "", "Template to use (overrides config)")
 	generateFeatureCmd.Flags().StringVar(&generatePattern, "pattern", "", "Feature pattern to use (flat, grouped, clean_architecture)")
 	generateFeatureCmd.Flags().BoolVar(&generateWithExamples, "with-examples", false, "Find and show similar existing features before generating")
+	generateFeatureCmd.Flags().StringVar(&generateRoles, "roles", "", "Comma-separated file roles to generate (e.g. bloc,event,state,screen)")
+	generateFeatureCmd.Flags().StringVar(&generateLike, "like", "", "Use an existing feature path/name as the shape reference")
 	generateCmd.AddCommand(generateFeatureCmd)
 	rootCmd.AddCommand(generateCmd)
 }
@@ -70,6 +76,10 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	if err := applyGeneratePattern(&conv); err != nil {
 		return err
 	}
+	roles := parseRoles(generateRoles)
+	if err := applyGenerateLike(&conv, featureName, generateLike, &roles); err != nil {
+		return err
+	}
 
 	tmplName := cfg.DefaultTemplate
 	if generateTemplate != "" {
@@ -95,7 +105,7 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	// Generate files from local templates.
 	genMode := "template"
 	gen := generator.NewTemplateGenerator()
-	files, err := gen.Generate(featureName, tmplName, &conv)
+	files, err := gen.GenerateWithOptions(featureName, tmplName, &conv, generator.GenerateOptions{Roles: roles})
 	if err != nil {
 		return fmt.Errorf("generate: %w", err)
 	}
@@ -156,10 +166,7 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 }
 
 func applyGeneratePattern(conv *models.Convention) error {
-	pattern := conv.FeatureStructure
-	if conv.FeaturesAnalysis.RecommendedPattern != "" {
-		pattern = conv.FeaturesAnalysis.RecommendedPattern
-	}
+	pattern := recommendedPatternForGeneration(conv)
 	if generatePattern != "" {
 		pattern = generatePattern
 	}
@@ -173,6 +180,21 @@ func applyGeneratePattern(conv *models.Convention) error {
 	return nil
 }
 
+func applyRecommendedPattern(conv *models.Convention) {
+	pattern := recommendedPatternForGeneration(conv)
+	if pattern == "" {
+		pattern = "flat"
+	}
+	conv.FeatureStructure = pattern
+}
+
+func recommendedPatternForGeneration(conv *models.Convention) string {
+	if conv.FeaturesAnalysis.RecommendedPattern != "" {
+		return conv.FeaturesAnalysis.RecommendedPattern
+	}
+	return conv.FeatureStructure
+}
+
 func validPattern(pattern string) bool {
 	switch pattern {
 	case "flat", "grouped", "clean_architecture":
@@ -180,6 +202,98 @@ func validPattern(pattern string) bool {
 	default:
 		return false
 	}
+}
+
+func parseRoles(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	seen := map[string]bool{}
+	var roles []string
+	for _, part := range strings.Split(value, ",") {
+		role := strings.TrimSpace(part)
+		if role == "" || seen[role] {
+			continue
+		}
+		seen[role] = true
+		roles = append(roles, role)
+	}
+	return roles
+}
+
+func applyGenerateLike(conv *models.Convention, targetFeature, like string, roles *[]string) error {
+	if strings.TrimSpace(like) == "" {
+		return nil
+	}
+	feature, ok := findFeatureAnalysis(conv, like)
+	if !ok {
+		return fmt.Errorf("generate: --like feature %q not found in scanned conventions; run `repox scan` or choose an existing feature path", like)
+	}
+
+	targetPath := normalizeFeaturePathForCLI(targetFeature)
+	liked := feature
+	liked.Path = filepath.ToSlash(filepath.Join(conv.FeatureRoot, targetPath))
+	liked.Parent = filepath.ToSlash(filepath.Dir(targetPath))
+	if liked.Parent == "." {
+		liked.Parent = ""
+	}
+	liked.Name = filepath.Base(targetPath)
+	conv.FeaturesAnalysis.Features = append(conv.FeaturesAnalysis.Features, liked)
+	if liked.Structure != "" {
+		conv.FeatureStructure = liked.Structure
+	}
+	if len(*roles) == 0 {
+		*roles = featureRolesFromAnalysis(feature)
+	}
+	return nil
+}
+
+func findFeatureAnalysis(conv *models.Convention, query string) (models.FeatureAnalysis, bool) {
+	query = filepath.ToSlash(strings.Trim(query, "/ "))
+	queryBase := filepath.Base(query)
+	for _, feature := range conv.FeaturesAnalysis.Features {
+		rel := featurePathWithoutRootForCLI(conv.FeatureRoot, feature.Path)
+		if feature.Path == query || rel == query || feature.Name == query || feature.Name == queryBase {
+			return feature, true
+		}
+	}
+	return models.FeatureAnalysis{}, false
+}
+
+func featureRolesFromAnalysis(feature models.FeatureAnalysis) []string {
+	roles := make([]string, 0, len(feature.Files))
+	for role := range feature.Files {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	return roles
+}
+
+func normalizeFeaturePathForCLI(featureName string) string {
+	parts := strings.FieldsFunc(featureName, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "." {
+			continue
+		}
+		normalized = append(normalized, generator.ToSnakeCase(part))
+	}
+	if len(normalized) == 0 {
+		return generator.ToSnakeCase(featureName)
+	}
+	return filepath.Join(normalized...)
+}
+
+func featurePathWithoutRootForCLI(featureRoot, path string) string {
+	featureRoot = filepath.ToSlash(strings.Trim(featureRoot, "/"))
+	path = filepath.ToSlash(strings.Trim(path, "/"))
+	if featureRoot != "" && strings.HasPrefix(path, featureRoot+"/") {
+		return strings.TrimPrefix(path, featureRoot+"/")
+	}
+	return path
 }
 
 // saveSnapshot copies generated file contents to .repox/snapshots/<genID>/ for later diff.

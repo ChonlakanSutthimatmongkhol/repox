@@ -164,6 +164,30 @@ func TestGenerate_UsesScannedNestedFeatureRoutes(t *testing.T) {
 	assert.Contains(t, byPath[repoImplPath], "import '../../domain/repositories/fund_list_repository.dart';")
 }
 
+func TestGenerateWithOptions_FiltersRoles(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "clean_architecture"
+
+	files, err := gen.GenerateWithOptions("investment/fund_list", "flutter_bloc_feature", &conv, GenerateOptions{
+		Roles: []string{"bloc", "event", "state", "screen"},
+	})
+	require.NoError(t, err)
+
+	var paths []string
+	for _, f := range files {
+		paths = append(paths, f.Path)
+	}
+
+	assert.Len(t, files, 4)
+	assert.Contains(t, paths, "lib/features/investment/fund_list/presentation/bloc/fund_list_bloc.dart")
+	assert.Contains(t, paths, "lib/features/investment/fund_list/presentation/screen/fund_list_screen.dart")
+	for _, path := range paths {
+		assert.NotContains(t, path, "repository")
+		assert.NotContains(t, path, "test")
+	}
+}
+
 func TestGenerate_UnknownTemplate(t *testing.T) {
 	gen := NewTemplateGenerator()
 	conv := config.DefaultConventions()

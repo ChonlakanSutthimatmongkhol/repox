@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.3] — 2026-05-10
+
+### Added
+
+- Scan feature file anatomy per role, including class names, base classes, methods, constructor dependencies, imports, and capabilities such as `firebase_tracking`, `analytics`, `base_bloc`, and `route_model`.
+- Summarize role anatomy in `.repox/conventions.json`, `repox scan`, and generated project skills.
+- Add `repox plan feature <name-or-path>` to preview files, selected roles, and anatomy hints before generation.
+- Add `repox generate feature --roles <roles>` for role-filtered generation.
+- Add `repox generate feature --like <existing-feature>` to reuse an existing feature's shape, roles, routes, and structure.
+
+### Changed
+
+- Version bumped to **1.0.3**.
+
+---
+
 ## [1.0.2] — 2026-05-09
 
 ### Added
@@ -140,6 +156,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+[1.0.3]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v1.0.1...v1.0.2
 [1.0.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.4.0...v0.5.0
