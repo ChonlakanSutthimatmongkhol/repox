@@ -6,7 +6,7 @@
 
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Version](https://img.shields.io/badge/Version-v1.0.3-blue?style=flat)
+![Version](https://img.shields.io/badge/Version-v1.0.6-blue?style=flat)
 
 ---
 
@@ -561,15 +561,49 @@ Dry run — no files written:
 
 ### `repox generate feature investment/new_feature --like investment/fund_list`
 
-Reuse an existing feature flow's structure, roles, and file routes.
+Reuse an existing feature flow's structure, roles, file routes, and base classes.
+
+- Cross-feature imports are stripped automatically — no leaking business logic from the source feature
+- Base classes (`BaseBlocScreen`, `BaseStatefulWidget`) are detected from the source feature's anatomy and applied to the generated templates
+- The bloc constructor is pre-wired with the generated UseCase dependency
+- A **Next steps** checklist is printed after generation so the developer knows exactly what to wire up
 
 ```bash
-$ repox generate feature investment/new_feature --like investment/fund_list --dry-run
-Dry run — no files written:
-  lib/features/investment/new_feature/presentation/new_feature_bloc.dart
-  lib/features/investment/new_feature/presentation/new_feature_event.dart
-  lib/features/investment/new_feature/presentation/new_feature_screen.dart
-  lib/features/investment/new_feature/presentation/new_feature_state.dart
+$ repox generate feature investment/watchlist --like investment/fund_list
+  created lib/features/investment/watchlist/presentation/watchlist_bloc.dart
+  created lib/features/investment/watchlist/presentation/watchlist_event.dart
+  created lib/features/investment/watchlist/domain/repositories/watchlist_repository.dart
+  created lib/features/investment/watchlist/data/repositories/watchlist_repository_impl.dart
+  created lib/features/investment/watchlist/data/models/request/watchlist_request.dart
+  created lib/features/investment/watchlist/data/models/response/watchlist_response.dart
+  created lib/features/investment/watchlist/presentation/watchlist_screen.dart
+  created lib/features/investment/watchlist/presentation/watchlist_state.dart
+  created lib/features/investment/watchlist/domain/usecase/watchlist_usecase.dart
+
+9 created, 0 skipped
+
+Next steps:
+  1. Register in service locator:
+       sl.registerFactory(() => WatchlistUseCase(sl()))
+       sl.registerFactory(() => WatchlistBloc(sl()))
+  2. Bind repository in service locator:
+       sl.registerLazySingleton<WatchlistRepository>(() => WatchlistRepositoryImpl(sl()))
+  3. Add route in router:
+       GoRoute(path: '/watchlist', builder: (_, __) => BlocProvider(create: (_) => sl<WatchlistBloc>(), child: const WatchlistScreen()))
+  4. Implement fetch() in WatchlistRepositoryImpl
+```
+
+The generated `watchlist_bloc.dart` automatically uses the project's base class and injects the UseCase:
+
+```dart
+class WatchlistBloc extends BaseBlocScreen<WatchlistEvent, WatchlistState> {
+  WatchlistBloc(this._watchlistUseCase) : super(const WatchlistInitial()) {
+    on<WatchlistStarted>(_onStarted);
+  }
+
+  final WatchlistUseCase _watchlistUseCase;
+  // ...
+}
 ```
 
 ### `repox skill generate`
@@ -673,9 +707,18 @@ The generated skill teaches Copilot Enterprise or another AI host how to use Rep
 - ✅ `repox generate feature --roles bloc,event,state,screen`
 - ✅ `repox generate feature --like investment/fund_list`
 
+### ✅ v1.0.6 — Smart `--like` Generation _(released 2026-05-10)_
+
+> Goal: `--like` generates clean, project-aware scaffolds — not copies of business logic
+
+- ✅ Cross-feature import stripping: imports from other feature modules are removed automatically
+- ✅ Base class propagation: bloc and screen templates use the source feature's actual base classes (`BaseBlocScreen`, `BaseStatefulWidget`) detected from scanned anatomy
+- ✅ UseCase auto-injection: the generated bloc constructor is pre-wired with the generated UseCase
+- ✅ Post-generate **Next steps** checklist: DI registration, route, and repository implementation hints printed after each generation
+- ✅ Scanner depth-aware role assignment: primary roles (screen, bloc) always go to the shallowest file — fixes nested subdirectory files (e.g. `firebase/`) stealing the primary role
+
 ### v1.x — Future
 
-- Capability-aware template patches from scanned anatomy
 - Interactive role/capability picker
 - Go backend template (handler / service / repository)
 - Jira ticket → scaffold
