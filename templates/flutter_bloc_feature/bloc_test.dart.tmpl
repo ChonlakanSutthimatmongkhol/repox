@@ -1,0 +1,28 @@
+import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+
+import '../lib/features/{{.SnakeName}}/{{.SnakeName}}_bloc.dart';
+import '../lib/features/{{.SnakeName}}/{{.SnakeName}}_repository.dart';
+
+class Mock{{.PascalName}}{{.RepositorySuffix}} extends Mock implements {{.PascalName}}{{.RepositorySuffix}} {}
+
+void main() {
+  late Mock{{.PascalName}}{{.RepositorySuffix}} mock{{.PascalName}}{{.RepositorySuffix}};
+
+  setUp(() {
+    mock{{.PascalName}}{{.RepositorySuffix}} = Mock{{.PascalName}}{{.RepositorySuffix}}();
+  });
+
+  group('{{.PascalName}}{{.BlocSuffix}}', () {
+    blocTest<{{.PascalName}}{{.BlocSuffix}}, {{.PascalName}}{{.StateSuffix}}>(
+      'emits [Loading, Loaded] when {{.PascalName}}Started is added',
+      build: () => {{.PascalName}}{{.BlocSuffix}}(),
+      act: (bloc) => bloc.add(const {{.PascalName}}Started()),
+      expect: () => [
+        isA<{{.PascalName}}Loading>(),
+        isA<{{.PascalName}}Loaded>(),
+      ],
+    );
+  });
+}

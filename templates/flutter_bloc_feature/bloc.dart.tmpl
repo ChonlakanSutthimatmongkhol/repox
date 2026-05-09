@@ -1,0 +1,19 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+part '{{.SnakeName}}_event.dart';
+part '{{.SnakeName}}_state.dart';
+
+class {{.PascalName}}{{.BlocSuffix}} extends Bloc<{{.PascalName}}{{.EventSuffix}}, {{.PascalName}}{{.StateSuffix}}> {
+  {{.PascalName}}{{.BlocSuffix}}() : super(const {{.PascalName}}Initial()) {
+    on<{{.PascalName}}Started>(_onStarted);
+  }
+
+  Future<void> _onStarted(
+    {{.PascalName}}Started event,
+    Emitter<{{.PascalName}}{{.StateSuffix}}> emit,
+  ) async {
+    emit(const {{.PascalName}}Loading());
+    // TODO: implement
+    emit(const {{.PascalName}}Loaded());
+  }
+}

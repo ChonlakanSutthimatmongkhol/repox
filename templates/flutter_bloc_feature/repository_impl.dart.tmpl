@@ -1,0 +1,13 @@
+import '{{.SnakeName}}_repository.dart';
+import '{{.SnakeName}}_request.dart';
+import '{{.SnakeName}}_response.dart';
+
+class {{.PascalName}}{{.RepositorySuffix}}Impl implements {{.PascalName}}{{.RepositorySuffix}} {
+  const {{.PascalName}}{{.RepositorySuffix}}Impl();
+
+  @override
+  Future<{{.PascalName}}Response> fetch({{.PascalName}}Request request) async {
+    // TODO: implement
+    throw UnimplementedError();
+  }
+}

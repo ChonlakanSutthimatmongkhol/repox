@@ -1,0 +1,9 @@
+part of '{{.SnakeName}}_bloc.dart';
+
+sealed class {{.PascalName}}{{.EventSuffix}} {
+  const {{.PascalName}}{{.EventSuffix}}();
+}
+
+final class {{.PascalName}}Started extends {{.PascalName}}{{.EventSuffix}} {
+  const {{.PascalName}}Started();
+}

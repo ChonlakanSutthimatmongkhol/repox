@@ -1,0 +1,13 @@
+import '{{.SnakeName}}_repository.dart';
+import '{{.SnakeName}}_request.dart';
+import '{{.SnakeName}}_response.dart';
+
+class {{.PascalName}}{{.UsecaseSuffix}} {
+  const {{.PascalName}}{{.UsecaseSuffix}}(this._repository);
+
+  final {{.PascalName}}{{.RepositorySuffix}} _repository;
+
+  Future<{{.PascalName}}Response> call({{.PascalName}}Request request) {
+    return _repository.fetch(request);
+  }
+}
