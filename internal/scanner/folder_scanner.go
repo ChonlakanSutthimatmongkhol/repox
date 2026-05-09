@@ -3,6 +3,7 @@ package scanner
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var flutterFeatureRootCandidates = []string{
@@ -55,7 +56,7 @@ func DetectFeatureStructure(featureRoot string) (string, error) {
 	if err == nil && analysis.RecommendedPattern != "" {
 		return analysis.RecommendedPattern, nil
 	}
-	return DetectFeaturePattern(featureRoot), nil
+	return detectFeatureRootPatternFallback(featureRoot), nil
 }
 
 // DetectTestRoot returns the first existing test root directory for the project type.
@@ -90,4 +91,23 @@ func countFeatureFolders(featureRoot string) int {
 		}
 	}
 	return count
+}
+
+func detectFeatureRootPatternFallback(featureRoot string) string {
+	entries, err := os.ReadDir(featureRoot)
+	if err != nil {
+		return "flat"
+	}
+
+	counts := map[string]int{}
+	for _, entry := range entries {
+		if !entry.IsDir() || excludedDirs[entry.Name()] || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		counts[DetectFeaturePattern(filepath.Join(featureRoot, entry.Name()))]++
+	}
+	if pattern := recommendedPattern(counts); pattern != "" {
+		return pattern
+	}
+	return DetectFeaturePattern(featureRoot)
 }

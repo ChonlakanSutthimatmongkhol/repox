@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
 )
 
 func TestGenerate_Watchlist(t *testing.T) {
@@ -99,6 +100,68 @@ func TestGenerate_GroupedRoutesAndImports(t *testing.T) {
 	require.Contains(t, byPath, repoImplPath)
 	assert.Contains(t, byPath[screenPath], "import '../bloc/watchlist_bloc.dart';")
 	assert.Contains(t, byPath[repoImplPath], "import '../models/watchlist_request.dart';")
+}
+
+func TestGenerate_NestedFeaturePathUsesLeafNaming(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "clean_architecture"
+
+	files, err := gen.Generate("investment/fund_list", "flutter_bloc_feature", &conv)
+	require.NoError(t, err)
+
+	byPath := make(map[string]string, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f.Content
+	}
+
+	screenPath := "lib/features/investment/fund_list/presentation/screen/fund_list_screen.dart"
+	blocPath := "lib/features/investment/fund_list/presentation/bloc/fund_list_bloc.dart"
+	testPath := "test/features/investment/fund_list/fund_list_bloc_test.dart"
+
+	require.Contains(t, byPath, screenPath)
+	require.Contains(t, byPath, blocPath)
+	require.Contains(t, byPath, testPath)
+	assert.Contains(t, byPath[blocPath], "class FundListBloc")
+	assert.NotContains(t, byPath[blocPath], "InvestmentFundListBloc")
+	assert.Contains(t, byPath[screenPath], "import '../bloc/fund_list_bloc.dart';")
+}
+
+func TestGenerate_UsesScannedNestedFeatureRoutes(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "flat"
+	conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{
+		{
+			Name:      "fund_list",
+			Path:      "lib/features/investment/fund_list",
+			Parent:    "investment",
+			Structure: "clean_architecture",
+			FileRoutes: map[string]string{
+				"bloc":   "presentation",
+				"event":  "presentation",
+				"screen": "presentation",
+				"state":  "presentation",
+			},
+		},
+	}
+
+	files, err := gen.Generate("investment/fund_list", "flutter_bloc_feature", &conv)
+	require.NoError(t, err)
+
+	byPath := make(map[string]string, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f.Content
+	}
+
+	blocPath := "lib/features/investment/fund_list/presentation/fund_list_bloc.dart"
+	repoPath := "lib/features/investment/fund_list/domain/repositories/fund_list_repository.dart"
+	repoImplPath := "lib/features/investment/fund_list/data/repositories/fund_list_repository_impl.dart"
+
+	require.Contains(t, byPath, blocPath)
+	require.Contains(t, byPath, repoPath)
+	require.Contains(t, byPath, repoImplPath)
+	assert.Contains(t, byPath[repoImplPath], "import '../../domain/repositories/fund_list_repository.dart';")
 }
 
 func TestGenerate_UnknownTemplate(t *testing.T) {

@@ -259,6 +259,43 @@ func TestFlutterScanner_Scan(t *testing.T) {
 	assert.Equal(t, "grouped", conv.FeaturesAnalysis.RecommendedPattern)
 }
 
+func TestAnalyzeFeatureRoot_DetectsNestedFlowFeature(t *testing.T) {
+	dir := t.TempDir()
+	files := []string{
+		"lib/features/investment/fund_list/presentation/screen/fund_list_screen.dart",
+		"lib/features/investment/fund_list/presentation/bloc/fund_list_bloc.dart",
+		"lib/features/investment/fund_list/presentation/bloc/fund_list_event.dart",
+		"lib/features/investment/fund_list/presentation/bloc/fund_list_state.dart",
+		"lib/features/investment/fund_list/domain/repositories/fund_list_repository.dart",
+		"lib/features/investment/fund_list/data/repositories/fund_list_repository_impl.dart",
+		"lib/features/investment/fund_list/presentation/firebase/fund_list_screen_analytics.dart",
+		"lib/features/investment/fund_detail/fund_detail_screen.dart",
+	}
+	for _, f := range files {
+		writeFile(t, filepath.Join(dir, f), "")
+	}
+
+	analysis, err := AnalyzeFeatureRoot(dir, "lib/features")
+	require.NoError(t, err)
+	require.Len(t, analysis.Features, 2)
+
+	byPath := map[string]models.FeatureAnalysis{}
+	for _, feature := range analysis.Features {
+		byPath[feature.Path] = feature
+	}
+
+	fundList := byPath["lib/features/investment/fund_list"]
+	assert.Equal(t, "fund_list", fundList.Name)
+	assert.Equal(t, "investment", fundList.Parent)
+	assert.Equal(t, 2, fundList.Depth)
+	assert.Equal(t, "clean_architecture", fundList.Structure)
+	assert.Equal(t, "lib/features/investment/fund_list/presentation/bloc/fund_list_bloc.dart", fundList.Files["bloc"])
+	assert.Equal(t, "presentation/bloc", fundList.FileRoutes["bloc"])
+	assert.Equal(t, "presentation/screen", fundList.FileRoutes["screen"])
+	assert.NotContains(t, byPath, "lib/features/investment")
+	assert.NotContains(t, byPath, "lib/features/investment/fund_list/presentation/firebase")
+}
+
 func TestFlutterScanner_EmptyRepo(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "pubspec.yaml"), "flutter:\n  sdk: flutter\n")

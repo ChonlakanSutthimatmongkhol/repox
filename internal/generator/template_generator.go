@@ -24,6 +24,7 @@ func toGoPackageName(featureName string) string {
 // TemplateContext holds values passed to every scaffold template.
 type TemplateContext struct {
 	FeatureName      string
+	FeaturePath      string
 	PascalName       string
 	CamelName        string
 	SnakeName        string
@@ -116,18 +117,21 @@ func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) s
 
 	// *_test.* → test root; for Go, TestRoot == FeatureRoot so tests stay alongside source.
 	if strings.Contains(kind, "test") {
-		return filepath.Join(conv.TestRoot, ctx.SnakeName, outName)
+		return filepath.Join(conv.TestRoot, ctx.FeaturePath, outName)
 	}
-	return filepath.Join(conv.FeatureRoot, ctx.SnakeName, routeForKind(conv, kind), outName)
+	return filepath.Join(conv.FeatureRoot, ctx.FeaturePath, routeForKind(conv, ctx.FeaturePath, kind), outName)
 }
 
 func buildContext(featureName string, conv *models.Convention) TemplateContext {
+	featurePath := normalizeFeaturePath(featureName)
+	leafName := filepath.Base(featurePath)
 	return TemplateContext{
 		FeatureName:      featureName,
-		PascalName:       ToPascalCase(featureName),
-		CamelName:        ToCamelCase(featureName),
-		SnakeName:        ToSnakeCase(featureName),
-		PackageName:      toGoPackageName(featureName),
+		FeaturePath:      featurePath,
+		PascalName:       ToPascalCase(leafName),
+		CamelName:        ToCamelCase(leafName),
+		SnakeName:        ToSnakeCase(leafName),
+		PackageName:      toGoPackageName(leafName),
 		ModulePath:       conv.ModulePath,
 		ScreenSuffix:     conv.Naming.ScreenSuffix,
 		BlocSuffix:       conv.Naming.BlocSuffix,
@@ -151,11 +155,43 @@ func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Conventio
 
 func featureFilePath(conv *models.Convention, ctx TemplateContext, kind string) string {
 	outName := ctx.SnakeName + "_" + kind + ".dart"
-	return filepath.Join(conv.FeatureRoot, ctx.SnakeName, routeForKind(conv, kind), outName)
+	return filepath.Join(conv.FeatureRoot, ctx.FeaturePath, routeForKind(conv, ctx.FeaturePath, kind), outName)
 }
 
-func routeForKind(conv *models.Convention, kind string) string {
+func normalizeFeaturePath(featureName string) string {
+	parts := strings.FieldsFunc(featureName, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	if len(parts) == 0 {
+		return ToSnakeCase(featureName)
+	}
+
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "." {
+			continue
+		}
+		normalized = append(normalized, ToSnakeCase(part))
+	}
+	if len(normalized) == 0 {
+		return ToSnakeCase(featureName)
+	}
+	return filepath.Join(normalized...)
+}
+
+func routeForKind(conv *models.Convention, featurePath, kind string) string {
 	pattern := conv.FeatureStructure
+	if feature, ok := findFeatureConvention(conv, featurePath); ok {
+		if feature.FileRoutes != nil {
+			if route, exists := feature.FileRoutes[kind]; exists {
+				return route
+			}
+		}
+		if feature.Structure != "" {
+			pattern = feature.Structure
+		}
+	}
 	if pattern == "" {
 		pattern = "flat"
 	}
@@ -165,6 +201,39 @@ func routeForKind(conv *models.Convention, kind string) string {
 		}
 	}
 	return defaultRouteForKind(pattern, kind)
+}
+
+func findFeatureConvention(conv *models.Convention, featurePath string) (models.FeatureAnalysis, bool) {
+	target := filepath.ToSlash(featurePath)
+	targetParent := filepath.ToSlash(filepath.Dir(target))
+	if targetParent == "." {
+		targetParent = ""
+	}
+
+	var sibling models.FeatureAnalysis
+	hasSibling := false
+	for _, feature := range conv.FeaturesAnalysis.Features {
+		relPath := featurePathWithoutRoot(conv.FeatureRoot, feature.Path)
+		if relPath == target {
+			return feature, true
+		}
+		if filepath.ToSlash(feature.Parent) == targetParent {
+			if !hasSibling || feature.Path > sibling.Path {
+				sibling = feature
+				hasSibling = true
+			}
+		}
+	}
+	return sibling, hasSibling
+}
+
+func featurePathWithoutRoot(featureRoot, path string) string {
+	featureRoot = filepath.ToSlash(strings.Trim(featureRoot, "/"))
+	path = filepath.ToSlash(strings.Trim(path, "/"))
+	if featureRoot != "" && strings.HasPrefix(path, featureRoot+"/") {
+		return strings.TrimPrefix(path, featureRoot+"/")
+	}
+	return path
 }
 
 func defaultRouteForKind(pattern, kind string) string {

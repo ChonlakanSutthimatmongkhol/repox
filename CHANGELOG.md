@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.2] — 2026-05-09
+
+### Added
+
+- Detect nested feature flow folders such as `lib/features/investment/fund_list`.
+- Store per-feature role files and file routes in `.repox/conventions.json`.
+- Generate slash-separated feature paths using the leaf feature name for class and file names.
+
+### Changed
+
+- `repox scan` now skips implementation-only folders such as `firebase`, `analytics`, and empty container folders.
+- `repox generate feature <name-or-path>` uses exact scanned feature routes before falling back to global project pattern mappings.
+- Version bumped to **1.0.2**.
+
+---
+
 ## [1.0.0] — 2026-05-09
 
 ### Added
@@ -124,6 +140,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+[1.0.2]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v1.0.1...v1.0.2
 [1.0.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.3.0...v0.4.0

@@ -137,7 +137,7 @@ func patternScore(target string, example models.Example) float64 {
 func splitWords(s string) []string {
 	s = strings.ToLower(s)
 	parts := strings.FieldsFunc(s, func(r rune) bool {
-		return r == '_' || r == '-' || r == ' '
+		return r == '_' || r == '-' || r == ' ' || r == '/'
 	})
 	var words []string
 	for _, p := range parts {

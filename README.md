@@ -6,7 +6,7 @@
 
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Version](https://img.shields.io/badge/Version-v1.0.0-blue?style=flat)
+![Version](https://img.shields.io/badge/Version-v1.0.2-blue?style=flat)
 
 ---
 

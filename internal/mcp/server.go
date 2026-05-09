@@ -13,7 +13,7 @@ import (
 func Serve() error {
 	s := server.NewMCPServer(
 		"repox",
-		"1.0.0",
+		"1.0.2",
 		server.WithToolCapabilities(true),
 	)
 

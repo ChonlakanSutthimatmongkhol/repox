@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/scanner"
 )
 
 var indexExcludedDirs = map[string]bool{
@@ -29,7 +30,7 @@ func (f *FeatureIndexer) FindSimilar(target string, examples []models.Example, t
 	return FindSimilar(target, examples, topN)
 }
 
-// IndexFeatures walks the first-level subdirectories of featureRoot and builds
+// IndexFeatures walks discovered feature units under featureRoot and builds
 // an Example for each feature found.
 func IndexFeatures(rootDir string, conv *models.Convention) ([]models.Example, error) {
 	featureRoot := filepath.Join(rootDir, conv.FeatureRoot)
@@ -39,17 +40,44 @@ func IndexFeatures(rootDir string, conv *models.Convention) ([]models.Example, e
 	}
 
 	var examples []models.Example
-	for _, entry := range entries {
-		if !entry.IsDir() || indexExcludedDirs[entry.Name()] {
-			continue
+	features := conv.FeaturesAnalysis.Features
+	if len(features) == 0 {
+		analysis, err := scanner.AnalyzeFeatureRoot(rootDir, conv.FeatureRoot)
+		if err == nil {
+			features = analysis.Features
 		}
-		featureDir := filepath.Join(featureRoot, entry.Name())
-		ex := buildExample(rootDir, featureDir, entry.Name(), conv)
-		examples = append(examples, ex)
+	}
+	if len(features) > 0 {
+		for _, feature := range features {
+			if feature.Path == "" {
+				continue
+			}
+			featureDir := filepath.Join(rootDir, feature.Path)
+			if info, err := os.Stat(featureDir); err != nil || !info.IsDir() {
+				continue
+			}
+			name := feature.Name
+			if name == "" {
+				name = filepath.Base(featureDir)
+			}
+			examples = append(examples, buildExample(rootDir, featureDir, name, conv))
+		}
+	} else {
+		for _, entry := range entries {
+			if !entry.IsDir() || indexExcludedDirs[entry.Name()] {
+				continue
+			}
+			featureDir := filepath.Join(featureRoot, entry.Name())
+			ex := buildExample(rootDir, featureDir, entry.Name(), conv)
+			examples = append(examples, ex)
+		}
 	}
 
 	sort.Slice(examples, func(i, j int) bool {
-		return examples[i].Name < examples[j].Name
+		if examples[i].Path == examples[j].Path {
+			return examples[i].Name < examples[j].Name
+		}
+		return examples[i].Path < examples[j].Path
 	})
 	return examples, nil
 }
@@ -191,13 +219,13 @@ func detectFlutterStructure(featureDir string) string {
 func deriveFlutterPatterns(imports []string) []string {
 	patternMap := map[string]string{
 		"package:flutter_bloc/flutter_bloc.dart": "uses flutter_bloc",
-		"package:go_router/go_router.dart":        "uses go_router",
-		"package:riverpod/riverpod.dart":          "uses riverpod",
-		"package:provider/provider.dart":          "uses provider",
-		"package:dio/dio.dart":                    "uses dio",
-		"package:http/http.dart":                  "uses http",
-		"package:equatable/equatable.dart":        "uses equatable",
-		"package:get_it/get_it.dart":              "uses get_it",
+		"package:go_router/go_router.dart":       "uses go_router",
+		"package:riverpod/riverpod.dart":         "uses riverpod",
+		"package:provider/provider.dart":         "uses provider",
+		"package:dio/dio.dart":                   "uses dio",
+		"package:http/http.dart":                 "uses http",
+		"package:equatable/equatable.dart":       "uses equatable",
+		"package:get_it/get_it.dart":             "uses get_it",
 	}
 	seen := map[string]bool{}
 	var patterns []string

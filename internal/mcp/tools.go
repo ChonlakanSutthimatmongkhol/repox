@@ -4,7 +4,7 @@ import "github.com/mark3labs/mcp-go/mcp"
 
 func toolScan() mcp.Tool {
 	return mcp.NewTool("repox_scan",
-		mcp.WithDescription("Scan the current repository and detect project conventions (type, folder structure, naming, state management, routing, imports). Saves conventions to .repox/conventions.json."),
+		mcp.WithDescription("Scan the current repository and detect project conventions (type, folder structure, nested feature flows, naming, state management, routing, imports). Saves conventions to .repox/conventions.json."),
 		mcp.WithString("project_override",
 			mcp.Description("Override auto-detected project type (flutter, go, node)"),
 		),
@@ -16,7 +16,7 @@ func toolGenerate() mcp.Tool {
 		mcp.WithDescription("Generate a feature scaffold matching the repo's conventions. Returns list of generated files."),
 		mcp.WithString("feature_name",
 			mcp.Required(),
-			mcp.Description("Name of the feature to generate (e.g. watchlist, fund-profile)"),
+			mcp.Description("Name or nested path of the feature to generate (e.g. watchlist, investment/fund_list)"),
 		),
 		mcp.WithBoolean("use_examples",
 			mcp.Description("Find and use similar existing features as reference"),

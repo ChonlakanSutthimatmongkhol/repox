@@ -125,6 +125,30 @@ func TestIndexFeatures_FilesRoles(t *testing.T) {
 	assert.Contains(t, files["repository"], "home_repository.dart")
 }
 
+func TestIndexFeatures_DetectsNestedFlowFeatures(t *testing.T) {
+	dir := t.TempDir()
+	featureRoot := "lib/features"
+	writeFile(t, filepath.Join(dir, featureRoot, "investment/fund_list/presentation/bloc/fund_list_bloc.dart"), "import 'package:flutter_bloc/flutter_bloc.dart';\n")
+	writeFile(t, filepath.Join(dir, featureRoot, "investment/fund_list/presentation/screen/fund_list_screen.dart"), "")
+	writeFile(t, filepath.Join(dir, featureRoot, "investment/fund_detail/fund_detail_screen.dart"), "")
+
+	examples, err := IndexFeatures(dir, defaultConv(featureRoot))
+	require.NoError(t, err)
+	require.Len(t, examples, 2)
+
+	byPath := map[string]models.Example{}
+	for _, ex := range examples {
+		byPath[ex.Path] = ex
+	}
+
+	fundList := byPath["lib/features/investment/fund_list"]
+	assert.Equal(t, "fund_list", fundList.Name)
+	assert.True(t, fundList.Metadata.HasBloc)
+	assert.True(t, fundList.Metadata.HasScreen)
+	assert.Contains(t, fundList.Files["bloc"], "fund_list_bloc.dart")
+	assert.NotContains(t, byPath, "lib/features/investment")
+}
+
 // ── ScoreSimilarity ───────────────────────────────────────────────────────────
 
 func TestScoreSimilarity_NameOverlap(t *testing.T) {

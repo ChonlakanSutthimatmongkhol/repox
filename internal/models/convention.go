@@ -46,10 +46,15 @@ type FeaturesAnalysis struct {
 
 // FeatureAnalysis describes one feature folder under the detected feature root.
 type FeatureAnalysis struct {
-	Name         string `json:"name"`
-	Path         string `json:"path"`
-	Structure    string `json:"structure"`
-	LastModified string `json:"last_modified"`
+	Name         string            `json:"name"`
+	Path         string            `json:"path"`
+	Parent       string            `json:"parent,omitempty"`
+	Depth        int               `json:"depth,omitempty"`
+	Structure    string            `json:"structure"`
+	LastModified string            `json:"last_modified"`
+	FileCount    int               `json:"file_count,omitempty"`
+	Files        map[string]string `json:"files,omitempty"`
+	FileRoutes   map[string]string `json:"file_routes,omitempty"`
 }
 
 // PatternDistribution stores the count and percentage for a feature structure.

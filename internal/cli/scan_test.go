@@ -78,7 +78,7 @@ func TestScanCommand_FlutterProject(t *testing.T) {
 	assert.Contains(t, out, "grouped: 1 features (50.0%)")
 	assert.Contains(t, out, "Recommended pattern: grouped")
 	assert.Contains(t, out, "Latest pattern:")
-	assert.Contains(t, out, "repox generate feature <name>")
+	assert.Contains(t, out, "repox generate feature <name-or-path>")
 	assert.Contains(t, out, "Conventions saved")
 
 	// Verify conventions.json was written correctly

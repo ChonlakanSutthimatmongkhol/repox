@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -157,7 +158,7 @@ func printPatternAnalysis(out io.Writer, analysis models.FeaturesAnalysis) {
 		fmt.Fprintln(out, "  Total features: 0")
 		fmt.Fprintln(out, "  No feature folders found to analyze.")
 		fmt.Fprintln(out, "\nNext step:")
-		fmt.Fprintln(out, "  repox generate feature <name>")
+		fmt.Fprintln(out, "  repox generate feature <name-or-path>")
 		return
 	}
 
@@ -178,6 +179,38 @@ func printPatternAnalysis(out io.Writer, analysis models.FeaturesAnalysis) {
 
 	fmt.Fprintf(out, "  Recommended pattern: %s\n", analysis.RecommendedPattern)
 	fmt.Fprintf(out, "  Latest pattern:      %s\n", analysis.LatestPattern)
+	printNestedFlowSummary(out, analysis.Features)
 	fmt.Fprintln(out, "\nNext step:")
-	fmt.Fprintln(out, "  repox generate feature <name>")
+	fmt.Fprintln(out, "  repox generate feature <name-or-path>")
+}
+
+func printNestedFlowSummary(out io.Writer, features []models.FeatureAnalysis) {
+	var nested []models.FeatureAnalysis
+	for _, feature := range features {
+		if feature.Parent != "" || feature.Depth > 1 {
+			nested = append(nested, feature)
+		}
+	}
+	if len(nested) == 0 {
+		return
+	}
+
+	fmt.Fprintf(out, "  Nested flows:        %d\n", len(nested))
+	limit := len(nested)
+	if limit > 5 {
+		limit = 5
+	}
+	for i := 0; i < limit; i++ {
+		feature := nested[i]
+		fmt.Fprintf(out, "    - %s [%s]\n", strings.TrimPrefix(feature.Path, "/"), strings.Join(featureRoles(feature), ", "))
+	}
+}
+
+func featureRoles(feature models.FeatureAnalysis) []string {
+	roles := make([]string, 0, len(feature.Files))
+	for role := range feature.Files {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	return roles
 }

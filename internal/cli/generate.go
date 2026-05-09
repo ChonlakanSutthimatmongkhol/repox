@@ -30,7 +30,7 @@ var generateCmd = &cobra.Command{
 }
 
 var generateFeatureCmd = &cobra.Command{
-	Use:   "feature <name>",
+	Use:   "feature <name-or-path>",
 	Short: "Generate a feature scaffold",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runGenerateFeature,

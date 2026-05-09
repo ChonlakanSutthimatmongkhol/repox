@@ -169,7 +169,7 @@ func formatPatternAnalysis(analysis models.FeaturesAnalysis) string {
 	fmt.Fprintf(&b, "\n\nDiscover:\n  Features found: %d\n\nPattern Analysis:\n  Total features: %d\n", len(analysis.Features), len(analysis.Features))
 	if len(analysis.Features) == 0 {
 		fmt.Fprintln(&b, "  No feature folders found to analyze.")
-		fmt.Fprintln(&b, "\nNext step:\n  repox generate feature <name>")
+		fmt.Fprintln(&b, "\nNext step:\n  repox generate feature <name-or-path>")
 		return b.String()
 	}
 	fmt.Fprintln(&b, "  Pattern distribution:")
@@ -184,8 +184,35 @@ func formatPatternAnalysis(analysis models.FeaturesAnalysis) string {
 	}
 	fmt.Fprintf(&b, "  Recommended pattern: %s\n", analysis.RecommendedPattern)
 	fmt.Fprintf(&b, "  Latest pattern:      %s\n", analysis.LatestPattern)
-	fmt.Fprintln(&b, "\nNext step:\n  repox generate feature <name>")
+	formatNestedFlows(&b, analysis.Features)
+	fmt.Fprintln(&b, "\nNext step:\n  repox generate feature <name-or-path>")
 	return b.String()
+}
+
+func formatNestedFlows(b *strings.Builder, features []models.FeatureAnalysis) {
+	var nested []models.FeatureAnalysis
+	for _, feature := range features {
+		if feature.Parent != "" || feature.Depth > 1 {
+			nested = append(nested, feature)
+		}
+	}
+	if len(nested) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "  Nested flows:        %d\n", len(nested))
+	limit := len(nested)
+	if limit > 5 {
+		limit = 5
+	}
+	for i := 0; i < limit; i++ {
+		feature := nested[i]
+		roles := make([]string, 0, len(feature.Files))
+		for role := range feature.Files {
+			roles = append(roles, role)
+		}
+		sort.Strings(roles)
+		fmt.Fprintf(b, "    - %s [%s]\n", feature.Path, strings.Join(roles, ", "))
+	}
 }
 
 func saveSnapshotMCP(genID string, files []generator.GeneratedFile, baseDir string) string {
