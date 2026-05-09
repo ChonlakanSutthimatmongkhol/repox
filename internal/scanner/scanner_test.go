@@ -257,6 +257,8 @@ func TestFlutterScanner_Scan(t *testing.T) {
 	assert.Equal(t, 1, conv.FeaturesAnalysis.PatternDistribution["clean_architecture"].Count)
 	assert.Equal(t, 1, conv.FeaturesAnalysis.PatternDistribution["grouped"].Count)
 	assert.Equal(t, "grouped", conv.FeaturesAnalysis.RecommendedPattern)
+	assert.Equal(t, "domain/repository", conv.PatternMappings["clean_architecture"].FileRoutes["repository"])
+	assert.Equal(t, "presentation/bloc", conv.PatternMappings["clean_architecture"].FileRoutes["bloc"])
 }
 
 func TestAnalyzeFeatureRoot_DetectsNestedFlowFeature(t *testing.T) {

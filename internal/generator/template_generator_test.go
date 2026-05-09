@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -186,6 +188,65 @@ func TestGenerateWithOptions_FiltersRoles(t *testing.T) {
 		assert.NotContains(t, path, "repository")
 		assert.NotContains(t, path, "test")
 	}
+}
+
+func TestGenerateWithOptions_LikeFeatureRewritesSourceFiles(t *testing.T) {
+	gen := NewTemplateGenerator()
+	baseDir := t.TempDir()
+	sourcePath := filepath.Join(baseDir, "lib/features/investment/fund_list/presentation/fund_list_bloc.dart")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sourcePath), 0o755))
+	require.NoError(t, os.WriteFile(sourcePath, []byte(`import 'package:investment_module/features/investment/fund_list/presentation/fund_list_event.dart';
+import 'package:investment_module/common/widgets/shared_fund_list_item/shared_fund_list_item_widget.dart';
+import 'package:investment_module/features/investment/dashboard/domain/usecase/get_highlight_fund_details_usecase.dart';
+
+class FundListBloc extends BaseBlocScreen<FundListEvent, FundListState> {
+  FundListBloc() : super(FundListInitialState());
+
+  BaseTrackingLandedEvent createBaseTrackingLandedEvent() {
+    return FundListTrackLandingEvent();
+  }
+
+  SharedFundListItemWidget buildSharedWidget() {
+    return SharedFundListItemWidget();
+  }
+}
+`), 0o644))
+
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "flat"
+	like := models.FeatureAnalysis{
+		Name:      "fund_list",
+		Path:      "lib/features/investment/fund_list",
+		Structure: "clean_architecture",
+		Files: map[string]string{
+			"bloc": "lib/features/investment/fund_list/presentation/fund_list_bloc.dart",
+		},
+		FileRoutes: map[string]string{
+			"bloc": "presentation",
+		},
+	}
+	conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{like}
+
+	files, err := gen.GenerateWithOptions("investment/new_feature", "flutter_bloc_feature", &conv, GenerateOptions{
+		Roles:       []string{"bloc"},
+		LikeFeature: &like,
+		BaseDir:     baseDir,
+	})
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+
+	assert.Equal(t, "lib/features/investment/new_feature/presentation/new_feature_bloc.dart", files[0].Path)
+	// Source file identifiers are renamed
+	assert.Contains(t, files[0].Content, "class NewFeatureBloc extends BaseBlocScreen<NewFeatureEvent, NewFeatureState>")
+	assert.Contains(t, files[0].Content, "return NewFeatureTrackLandingEvent();")
+	// Own-feature import is renamed
+	assert.Contains(t, files[0].Content, "investment/new_feature/presentation/new_feature_event.dart")
+	// Shared (non-feature) import is preserved
+	assert.Contains(t, files[0].Content, "common/widgets/shared_fund_list_item/shared_fund_list_item_widget.dart")
+	assert.Contains(t, files[0].Content, "SharedFundListItemWidget")
+	// Cross-feature import from dashboard is stripped
+	assert.NotContains(t, files[0].Content, "dashboard")
+	assert.NotContains(t, files[0].Content, "GetHighlightFundDetailsUseCase")
 }
 
 func TestGenerate_UnknownTemplate(t *testing.T) {

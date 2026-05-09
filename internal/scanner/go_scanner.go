@@ -69,7 +69,7 @@ func (s *GoScanner) Scan(rootDir string) (*models.Convention, error) {
 	}
 	conv.Routing = routing
 
-	conv.PatternMappings = goPatternMappings()
+	conv.PatternMappings = InferPatternMappings(conv.FeaturesAnalysis.Features, goPatternMappings())
 
 	return conv, nil
 }

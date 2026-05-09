@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -49,6 +50,67 @@ func AnalyzeFeatureRoot(rootDir, featureRoot string) (models.FeaturesAnalysis, e
 	analysis.LatestPattern = latestFeature.Structure
 	analysis.RoleAnatomy = buildRoleAnatomy(analysis.Features)
 	return analysis, nil
+}
+
+// InferPatternMappings learns role routes from scanned feature files.
+func InferPatternMappings(features []models.FeatureAnalysis, fallback models.PatternMappings) models.PatternMappings {
+	mappings := clonePatternMappings(fallback)
+	routeCounts := map[string]map[string]map[string]int{}
+
+	for _, feature := range features {
+		pattern := feature.Structure
+		if pattern == "" || len(feature.FileRoutes) == 0 {
+			continue
+		}
+		if routeCounts[pattern] == nil {
+			routeCounts[pattern] = map[string]map[string]int{}
+		}
+		for role, route := range feature.FileRoutes {
+			if role == "" {
+				continue
+			}
+			if routeCounts[pattern][role] == nil {
+				routeCounts[pattern][role] = map[string]int{}
+			}
+			routeCounts[pattern][role][route]++
+		}
+	}
+
+	for pattern, byRole := range routeCounts {
+		mapping := mappings[pattern]
+		if mapping.FileRoutes == nil {
+			mapping.FileRoutes = map[string]string{}
+		}
+		for role, counts := range byRole {
+			mapping.FileRoutes[role] = mostCommonRoute(counts)
+		}
+		mappings[pattern] = mapping
+	}
+	return mappings
+}
+
+func clonePatternMappings(in models.PatternMappings) models.PatternMappings {
+	out := models.PatternMappings{}
+	for pattern, mapping := range in {
+		copied := models.PatternMapping{FileRoutes: map[string]string{}}
+		for role, route := range mapping.FileRoutes {
+			copied.FileRoutes[role] = route
+		}
+		out[pattern] = copied
+	}
+	return out
+}
+
+func mostCommonRoute(counts map[string]int) string {
+	bestRoute := ""
+	bestCount := -1
+	for route, count := range counts {
+		if count > bestCount || (count == bestCount && route < bestRoute) {
+			bestRoute = route
+			bestCount = count
+		}
+	}
+	return bestRoute
 }
 
 // DetectFeaturePattern checks one feature directory recursively and classifies
@@ -222,8 +284,11 @@ func collectFeatureFiles(rootDir, featureDir string) (map[string]string, map[str
 			}
 			return nil
 		}
+		if isGeneratedSourceFile(path) {
+			return nil
+		}
 
-		role := roleForFeatureFile(d.Name())
+		role := roleForFeaturePath(featureDir, path)
 		if role == "" {
 			return nil
 		}
@@ -235,14 +300,59 @@ func collectFeatureFiles(rootDir, featureDir string) (map[string]string, map[str
 		if err != nil || route == "." {
 			route = ""
 		}
-		if _, exists := files[role]; !exists {
-			files[role] = filepath.ToSlash(rel)
-			routes[role] = filepath.ToSlash(route)
-		}
+		role = uniqueFeatureRole(role, filepath.ToSlash(route), files)
+		files[role] = filepath.ToSlash(rel)
+		routes[role] = filepath.ToSlash(route)
 		return nil
 	})
 
 	return files, routes
+}
+
+func isGeneratedSourceFile(path string) bool {
+	base := filepath.Base(path)
+	return strings.HasSuffix(base, ".g.dart") ||
+		strings.HasSuffix(base, ".freezed.dart") ||
+		strings.HasSuffix(base, ".gen.dart") ||
+		strings.HasSuffix(base, ".generated.dart")
+}
+
+func roleForFeaturePath(featureDir, path string) string {
+	if role := roleForFeatureFile(filepath.Base(path)); role != "" {
+		return role
+	}
+	ext := filepath.Ext(path)
+	if ext != ".dart" && ext != ".go" {
+		return ""
+	}
+	base := strings.TrimSuffix(filepath.Base(path), ext)
+	featureName := filepath.Base(featureDir)
+	if strings.HasPrefix(base, featureName+"_") {
+		base = strings.TrimPrefix(base, featureName+"_")
+	}
+	role := strings.Trim(base, "_")
+	if role == "" || role == featureName {
+		return ""
+	}
+	return role
+}
+
+func uniqueFeatureRole(role, route string, files map[string]string) string {
+	if _, exists := files[role]; !exists {
+		return role
+	}
+	prefix := strings.NewReplacer("/", "_", "\\", "_").Replace(route)
+	prefix = strings.Trim(prefix, "_")
+	if prefix == "" {
+		prefix = role
+	}
+	candidate := prefix + "_" + role
+	for i := 2; ; i++ {
+		if _, exists := files[candidate]; !exists {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s_%d", prefix+"_"+role, i)
+	}
 }
 
 func roleForFeatureFile(filename string) string {
@@ -265,9 +375,9 @@ func roleForFeatureFile(filename string) string {
 		return "repository"
 	case strings.HasSuffix(base, "_usecase"), strings.HasSuffix(base, "_use_case"):
 		return "usecase"
-	case strings.HasSuffix(base, "_request"):
+	case strings.HasSuffix(base, "_request"), strings.HasSuffix(base, "_request_model"), strings.HasSuffix(base, "_request_body"):
 		return "request"
-	case strings.HasSuffix(base, "_response"):
+	case strings.HasSuffix(base, "_response"), strings.HasSuffix(base, "_response_model"):
 		return "response"
 	case strings.HasSuffix(base, "_handler"), strings.HasSuffix(base, "_controller"):
 		return "handler"
@@ -290,7 +400,8 @@ func isFeatureInternalDir(name string) bool {
 	case "presentation", "domain", "data", "bloc", "cubit", "screen", "screens",
 		"page", "pages", "repository", "repositories", "usecase", "usecases",
 		"model", "models", "widget", "widgets", "delivery", "handler", "handlers",
-		"controller", "controllers", "service", "services", "firebase", "analytics":
+		"controller", "controllers", "service", "services", "request", "requests",
+		"response", "responses", "enum", "enums", "firebase", "analytics":
 		return true
 	default:
 		return false

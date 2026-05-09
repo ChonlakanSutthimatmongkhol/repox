@@ -70,7 +70,7 @@ func (s *FlutterScanner) Scan(rootDir string) (*models.Convention, error) {
 		return nil, fmt.Errorf("flutter_scanner: detect routing: %w", err)
 	}
 	conv.Routing = routing
-	conv.PatternMappings = defaultPatternMappings()
+	conv.PatternMappings = InferPatternMappings(conv.FeaturesAnalysis.Features, defaultPatternMappings())
 
 	return conv, nil
 }

@@ -76,14 +76,21 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	if err := applyGeneratePattern(&conv); err != nil {
 		return err
 	}
-	roles := parseRoles(generateRoles)
-	if err := applyGenerateLike(&conv, featureName, generateLike, &roles); err != nil {
-		return err
-	}
-
 	tmplName := cfg.DefaultTemplate
 	if generateTemplate != "" {
 		tmplName = generateTemplate
+	}
+
+	roles := parseRoles(generateRoles)
+	var likeFeature *models.FeatureAnalysis
+	if strings.TrimSpace(generateLike) != "" {
+		feature, ok := findFeatureAnalysis(&conv, generateLike)
+		if ok {
+			likeFeature = &feature
+		}
+	}
+	if err := applyGenerateLike(&conv, featureName, generateLike, tmplName, &roles); err != nil {
+		return err
 	}
 
 	// --with-examples: show similar features found
@@ -104,8 +111,16 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 
 	// Generate files from local templates.
 	genMode := "template"
+	if likeFeature != nil {
+		genMode = "like"
+	}
 	gen := generator.NewTemplateGenerator()
-	files, err := gen.GenerateWithOptions(featureName, tmplName, &conv, generator.GenerateOptions{Roles: roles})
+	files, err := gen.GenerateWithOptions(featureName, tmplName, &conv, generator.GenerateOptions{
+		Roles:         roles,
+		RolesExplicit: strings.TrimSpace(generateRoles) != "",
+		LikeFeature:   likeFeature,
+		BaseDir:       cwd,
+	})
 	if err != nil {
 		return fmt.Errorf("generate: %w", err)
 	}
@@ -173,8 +188,8 @@ func applyGeneratePattern(conv *models.Convention) error {
 	if pattern == "" {
 		pattern = "flat"
 	}
-	if !validPattern(pattern) {
-		return fmt.Errorf("generate: unsupported pattern %q (use flat, grouped, or clean_architecture)", pattern)
+	if !validPattern(pattern, conv) {
+		return fmt.Errorf("generate: unsupported pattern %q (not found in .repox/conventions.json pattern_mappings)", pattern)
 	}
 	conv.FeatureStructure = pattern
 	return nil
@@ -195,13 +210,15 @@ func recommendedPatternForGeneration(conv *models.Convention) string {
 	return conv.FeatureStructure
 }
 
-func validPattern(pattern string) bool {
-	switch pattern {
-	case "flat", "grouped", "clean_architecture":
-		return true
-	default:
+func validPattern(pattern string, conv *models.Convention) bool {
+	if pattern == "" {
 		return false
 	}
+	if conv.PatternMappings == nil {
+		return true
+	}
+	_, ok := conv.PatternMappings[pattern]
+	return ok
 }
 
 func parseRoles(value string) []string {
@@ -221,7 +238,7 @@ func parseRoles(value string) []string {
 	return roles
 }
 
-func applyGenerateLike(conv *models.Convention, targetFeature, like string, roles *[]string) error {
+func applyGenerateLike(conv *models.Convention, targetFeature, like, templateName string, roles *[]string) error {
 	if strings.TrimSpace(like) == "" {
 		return nil
 	}
@@ -243,7 +260,11 @@ func applyGenerateLike(conv *models.Convention, targetFeature, like string, role
 		conv.FeatureStructure = liked.Structure
 	}
 	if len(*roles) == 0 {
-		*roles = featureRolesFromAnalysis(feature)
+		templateRoles, err := generator.TemplateRoles(templateName)
+		if err != nil {
+			return err
+		}
+		*roles = rolesForLikeFeature(feature, conv, templateRoles)
 	}
 	return nil
 }
@@ -267,6 +288,69 @@ func featureRolesFromAnalysis(feature models.FeatureAnalysis) []string {
 	}
 	sort.Strings(roles)
 	return roles
+}
+
+func rolesForLikeFeature(feature models.FeatureAnalysis, conv *models.Convention, templateRoles []string) []string {
+	seen := map[string]bool{}
+	var roles []string
+	for _, role := range featureRolesFromAnalysis(feature) {
+		seen[role] = true
+		roles = append(roles, role)
+	}
+	for _, role := range scannedTemplateRoles(feature.Structure, conv, templateRoles) {
+		if isTestRole(role) {
+			continue
+		}
+		if seen[role] {
+			continue
+		}
+		seen[role] = true
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	return roles
+}
+
+func scannedTemplateRoles(pattern string, conv *models.Convention, templateRoles []string) []string {
+	templateRoleSet := map[string]bool{}
+	for _, role := range templateRoles {
+		if role != "" && !isTestRole(role) {
+			templateRoleSet[role] = true
+		}
+	}
+
+	seen := map[string]bool{}
+	for _, feature := range conv.FeaturesAnalysis.Features {
+		if pattern != "" && feature.Structure != pattern {
+			continue
+		}
+		for role := range feature.Files {
+			if templateRoleSet[role] {
+				seen[role] = true
+			}
+		}
+	}
+	for role := range conv.FeaturesAnalysis.RoleAnatomy {
+		if templateRoleSet[role] {
+			seen[role] = true
+		}
+	}
+
+	if len(seen) == 0 {
+		for role := range templateRoleSet {
+			seen[role] = true
+		}
+	}
+	roles := make([]string, 0, len(seen))
+	for role := range seen {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	return roles
+}
+
+func isTestRole(role string) bool {
+	return strings.HasSuffix(role, "_test") || role == "test"
 }
 
 func normalizeFeaturePathForCLI(featureName string) string {

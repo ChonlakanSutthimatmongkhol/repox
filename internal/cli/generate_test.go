@@ -136,7 +136,15 @@ func TestGenerateFeature_RolesDryRun(t *testing.T) {
 }
 
 func TestGenerateFeature_LikeUsesFeatureShape(t *testing.T) {
-	setupInitDir(t)
+	dir := setupInitDir(t)
+	sourceBloc := filepath.Join(dir, "lib/features/investment/fund_list/presentation/fund_list_bloc.dart")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sourceBloc), 0o755))
+	require.NoError(t, os.WriteFile(sourceBloc, []byte(`class FundListBloc extends BaseBlocScreen<FundListEvent, FundListState> {
+  BaseTrackingLandedEvent createBaseTrackingLandedEvent() {
+    return FundListTrackLandingEvent();
+  }
+}
+`), 0o644))
 
 	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
 	require.NoError(t, err)
@@ -160,11 +168,24 @@ func TestGenerateFeature_LikeUsesFeatureShape(t *testing.T) {
 				"state":  "presentation",
 			},
 		},
+		{
+			Name:      "dashboard",
+			Path:      "lib/features/investment/dashboard",
+			Parent:    "investment",
+			Structure: "clean_architecture",
+			Files: map[string]string{
+				"repository":      "lib/features/investment/dashboard/domain/repositories/dashboard_repository.dart",
+				"repository_impl": "lib/features/investment/dashboard/data/repositories/dashboard_repository_impl.dart",
+				"request":         "lib/features/investment/dashboard/data/models/dashboard_request.dart",
+				"response":        "lib/features/investment/dashboard/data/models/dashboard_response.dart",
+				"usecase":         "lib/features/investment/dashboard/domain/usecases/dashboard_usecase.dart",
+			},
+		},
 	}
 	require.NoError(t, config.Save(config.RepoxPath("conventions.json"), conv))
 
 	generateForce = false
-	generateDryRun = true
+	generateDryRun = false
 	generateTemplate = ""
 	generatePattern = ""
 	generateRoles = ""
@@ -182,8 +203,52 @@ func TestGenerateFeature_LikeUsesFeatureShape(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "lib/features/investment/new_feature/presentation/new_feature_bloc.dart")
 	assert.Contains(t, out, "lib/features/investment/new_feature/presentation/new_feature_screen.dart")
-	assert.NotContains(t, out, "new_feature_repository.dart")
+	assert.Contains(t, out, "lib/features/investment/new_feature/domain/repositories/new_feature_repository.dart")
+	assert.Contains(t, out, "lib/features/investment/new_feature/data/repositories/new_feature_repository_impl.dart")
+	assert.Contains(t, out, "lib/features/investment/new_feature/domain/usecases/new_feature_usecase.dart")
+	assert.Contains(t, out, "lib/features/investment/new_feature/data/models/new_feature_request.dart")
 	assert.NotContains(t, out, "new_feature_bloc_test.dart")
+
+	generatedBloc, err := os.ReadFile(filepath.Join(dir, "lib/features/investment/new_feature/presentation/new_feature_bloc.dart"))
+	require.NoError(t, err)
+	assert.Contains(t, string(generatedBloc), "class NewFeatureBloc extends BaseBlocScreen<NewFeatureEvent, NewFeatureState>")
+	assert.Contains(t, string(generatedBloc), "return NewFeatureTrackLandingEvent();")
+	assert.NotContains(t, string(generatedBloc), "FundList")
+}
+
+func TestRolesForLikeFeature_IncludesCleanArchitectureLayers(t *testing.T) {
+	conv := config.DefaultConventions()
+	conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{
+		{
+			Structure: "clean_architecture",
+			Files: map[string]string{
+				"bloc":            "lib/features/investment/dashboard/presentation/dashboard_bloc.dart",
+				"repository":      "lib/features/investment/dashboard/domain/repositories/dashboard_repository.dart",
+				"repository_impl": "lib/features/investment/dashboard/data/repositories/dashboard_repository_impl.dart",
+				"request":         "lib/features/investment/dashboard/data/models/dashboard_request.dart",
+				"response":        "lib/features/investment/dashboard/data/models/dashboard_response.dart",
+				"usecase":         "lib/features/investment/dashboard/domain/usecases/dashboard_usecase.dart",
+			},
+		},
+	}
+
+	roles := rolesForLikeFeature(models.FeatureAnalysis{
+		Structure: "clean_architecture",
+		Files: map[string]string{
+			"bloc":   "lib/features/investment/fund_list/presentation/fund_list_bloc.dart",
+			"event":  "lib/features/investment/fund_list/presentation/fund_list_event.dart",
+			"screen": "lib/features/investment/fund_list/presentation/fund_list_screen.dart",
+			"state":  "lib/features/investment/fund_list/presentation/fund_list_state.dart",
+		},
+	}, &conv, []string{"bloc", "bloc_test", "event", "repository", "repository_impl", "request", "response", "screen", "state", "usecase"})
+
+	assert.Contains(t, roles, "bloc")
+	assert.Contains(t, roles, "repository")
+	assert.Contains(t, roles, "repository_impl")
+	assert.Contains(t, roles, "request")
+	assert.Contains(t, roles, "response")
+	assert.Contains(t, roles, "usecase")
+	assert.NotContains(t, roles, "bloc_test")
 }
 
 func TestGenerateFeature_UsesRecommendedPatternFromScan(t *testing.T) {

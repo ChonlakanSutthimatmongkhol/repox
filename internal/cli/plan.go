@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -42,6 +43,10 @@ func runPlanFeature(cmd *cobra.Command, args []string) error {
 	}
 
 	featureName := args[0]
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("plan: getwd: %w", err)
+	}
 	cfg, err := config.Load[models.Config](config.RepoxPath("config.json"))
 	if err != nil {
 		return fmt.Errorf("plan: load config: %w", err)
@@ -53,18 +58,62 @@ func runPlanFeature(cmd *cobra.Command, args []string) error {
 	applyRecommendedPattern(&conv)
 
 	roles := parseRoles(planRoles)
-	if err := applyGenerateLike(&conv, featureName, planLike, &roles); err != nil {
+	var likeFeature *models.FeatureAnalysis
+	if strings.TrimSpace(planLike) != "" {
+		feature, ok := findFeatureAnalysis(&conv, planLike)
+		if ok {
+			likeFeature = &feature
+		}
+	}
+	if err := applyGenerateLike(&conv, featureName, planLike, cfg.DefaultTemplate, &roles); err != nil {
 		return err
 	}
 
 	gen := generator.NewTemplateGenerator()
-	files, err := gen.GenerateWithOptions(featureName, cfg.DefaultTemplate, &conv, generator.GenerateOptions{Roles: roles})
+	files, err := gen.GenerateWithOptions(featureName, cfg.DefaultTemplate, &conv, generator.GenerateOptions{
+		Roles:         roles,
+		RolesExplicit: strings.TrimSpace(planRoles) != "",
+		LikeFeature:   likeFeature,
+		BaseDir:       cwd,
+	})
 	if err != nil {
 		return fmt.Errorf("plan: %w", err)
+	}
+	if strings.TrimSpace(planRoles) == "" {
+		roles = rolesFromPlannedFiles(featureName, roles, files)
 	}
 
 	printFeaturePlan(cmd, featureName, planLike, conv, roles, files)
 	return nil
+}
+
+func rolesFromPlannedFiles(featureName string, roles []string, files []generator.GeneratedFile) []string {
+	seen := map[string]bool{}
+	for _, role := range roles {
+		if role == "" {
+			continue
+		}
+		seen[role] = true
+	}
+	featurePath := normalizeFeaturePathForCLI(featureName)
+	featureSnake := generator.ToSnakeCase(featurePath[strings.LastIndex(featurePath, string('/'))+1:])
+	for _, file := range files {
+		base := strings.TrimSuffix(file.Path[strings.LastIndex(file.Path, "/")+1:], ".dart")
+		base = strings.TrimSuffix(base, ".go")
+		if !strings.HasPrefix(base, featureSnake+"_") {
+			continue
+		}
+		role := strings.TrimPrefix(base, featureSnake+"_")
+		if role != "" {
+			seen[role] = true
+		}
+	}
+	merged := make([]string, 0, len(seen))
+	for role := range seen {
+		merged = append(merged, role)
+	}
+	sort.Strings(merged)
+	return merged
 }
 
 func printFeaturePlan(cmd *cobra.Command, featureName, like string, conv models.Convention, roles []string, files []generator.GeneratedFile) {
