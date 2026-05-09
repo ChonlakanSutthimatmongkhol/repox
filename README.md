@@ -39,6 +39,141 @@ repox --mcp                              # Start as MCP server (Claude Code / Co
 
 ---
 
+## 📦 Installation
+
+### Prerequisites
+
+- **Go 1.25+** — [install](https://go.dev/dl/)
+- **ANTHROPIC_API_KEY** — required for `--ai` and `repox learn` (get one at [console.anthropic.com](https://console.anthropic.com))
+
+### Install via Go
+
+```bash
+go install github.com/ChonlakanSutthimatmongkhol/repox/cmd/repox@latest
+```
+
+The binary lands at `$(go env GOPATH)/bin/repox`. Make sure that path is in your `$PATH`.
+
+```bash
+# Verify installation
+repox --version
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/ChonlakanSutthimatmongkhol/repox.git
+cd repox
+make install   # builds and copies to $(go env GOPATH)/bin/
+```
+
+### Set API key
+
+```bash
+# macOS / Linux — add to ~/.zshrc or ~/.bashrc
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Or set per-project in your IDE launch config
+```
+
+---
+
+## 🤖 MCP Setup (Claude Code · Copilot · Cursor)
+
+Repox runs as an MCP stdio server so AI tools can call it directly — no CLI needed.
+
+### Step 1 — Run in your project first
+
+```bash
+cd /your/flutter-project
+repox init    # creates .repox/
+repox scan    # detects conventions → .repox/conventions.json
+```
+
+### Step 2 — Add to your AI tool
+
+#### Claude Code (global — all projects)
+
+Add to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "repox": {
+      "type": "stdio",
+      "command": "/Users/<you>/go/bin/repox",
+      "args": ["--mcp"],
+      "env": {
+        "ANTHROPIC_API_KEY": "sk-ant-..."
+      }
+    }
+  }
+}
+```
+
+> **Tip:** Claude Code inherits your shell's `$PATH` and env, so if `repox` is already on your PATH and `ANTHROPIC_API_KEY` is exported you can omit the full path and `env` block.
+
+#### Claude Code (project-only)
+
+Create `.claude/mcp.json` at the project root:
+
+```json
+{
+  "mcpServers": {
+    "repox": {
+      "type": "stdio",
+      "command": "repox",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+#### GitHub Copilot (VS Code)
+
+Create `.vscode/mcp.json` at the project root:
+
+```json
+{
+  "servers": {
+    "repox": {
+      "type": "stdio",
+      "command": "repox",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+Then open **VS Code** → Command Palette → `MCP: List Servers` to confirm it appears.
+
+#### Cursor
+
+Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
+
+```json
+{
+  "mcpServers": {
+    "repox": {
+      "command": "repox",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+Restart Cursor after saving. The `repox_*` tools should appear in the tool list.
+
+### Step 3 — Ask your AI to use it
+
+Once connected, you can tell your AI assistant:
+
+```
+Use repox_scan to detect this project's conventions, then use repox_generate to scaffold a "payments" feature.
+```
+
+---
+
 ## 🏗️ How It Works
 
 ```mermaid
@@ -231,7 +366,6 @@ repox/
 │   │   ├── tools.go                # Tool schemas
 │   │   ├── handlers.go             # Tool handlers
 │   │   └── mcp_test.go             # Tests
-│   ├── ai/                         # AI generation (v0.4.0)
 │   ├── config/
 │   │   └── loader.go               # Generic Load[T]/Save[T], defaults
 │   └── models/
@@ -460,33 +594,19 @@ Similar features found:
 
 ---
 
-## 🔌 MCP Integration
+## 🔌 MCP Tool Reference
 
-Add to your MCP config (`.claude/mcp.json` or Cursor settings):
+> Full setup instructions are in the [MCP Setup](#-mcp-setup-claude-code--copilot--cursor) section above.
 
-```json
-{
-  "mcpServers": {
-    "repox": {
-      "command": "repox",
-      "args": ["--mcp"],
-      "cwd": "/path/to/your/project"
-    }
-  }
-}
-```
+| Tool | Parameters | Description |
+|---|---|---|
+| `repox_scan` | `project_override?` | Scan repo, detect conventions, index features → saves `.repox/conventions.json` |
+| `repox_generate` | `feature_name`, `use_ai?`, `use_examples?`, `force?`, `dry_run?` | Generate feature scaffold (template or AI mode) |
+| `repox_find_similar` | `feature_name`, `top_n?` | Find structurally similar existing features (default top 3) |
+| `repox_learn` | `generation_id?`, `auto_approve?` | Returns CLI usage hint — run `repox learn` in terminal for full flow |
+| `repox_explain_convention` | — | Return repo conventions in human-readable format |
 
-Available tools:
-
-| Tool | Description |
-|---|---|
-| `repox_scan` | Scan repo, detect conventions, index features |
-| `repox_generate` | Generate feature scaffold (AI or template mode) |
-| `repox_find_similar` | Find structurally similar existing features |
-| `repox_learn` | Extract lessons from developer edits |
-| `repox_explain_convention` | Explain repo conventions in natural language |
-
-Works with: **Claude Code** · **GitHub Copilot** · **Cursor**
+Works with: **Claude Code** · **GitHub Copilot (VS Code)** · **Cursor**
 
 ---
 
