@@ -3,6 +3,10 @@ package scanner
 import (
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
 )
 
 var flutterFeatureRootCandidates = []string{
@@ -42,50 +46,80 @@ func DetectFeatureRoot(rootDir, projectType string) (string, error) {
 	return "", nil
 }
 
-// DetectFeatureStructure inspects the first-level subdirectories of featureRoot
+// DetectFeatureStructure inspects subdirectories recursively (up to depth 3) of featureRoot
 // and returns "clean_architecture", "grouped", or "flat".
 func DetectFeatureStructure(featureRoot string) (string, error) {
-	entries, err := os.ReadDir(featureRoot)
+	cleanPatternHits := 0
+	groupedPatternHits := 0
+
+	err := filepath.WalkDir(featureRoot, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || !d.IsDir() {
+			return nil
+		}
+
+		rel, err := filepath.Rel(featureRoot, path)
+		if err != nil || rel == "." {
+			return nil
+		}
+
+		depth := strings.Count(rel, string(filepath.Separator))
+		if depth > 2 {
+			return filepath.SkipDir
+		}
+
+		if excludedDirs[d.Name()] {
+			return filepath.SkipDir
+		}
+
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return nil
+		}
+
+		hasPresentation := false
+		hasDomain := false
+		hasData := false
+		hasBloc := false
+		hasScreen := false
+		hasRepository := false
+
+		for _, sub := range entries {
+			if !sub.IsDir() {
+				continue
+			}
+			switch sub.Name() {
+			case "presentation":
+				hasPresentation = true
+			case "domain":
+				hasDomain = true
+			case "data":
+				hasData = true
+			case "bloc":
+				hasBloc = true
+			case "screen":
+				hasScreen = true
+			case "repository":
+				hasRepository = true
+			}
+		}
+
+		if hasPresentation && (hasDomain || hasData) {
+			cleanPatternHits++
+		}
+		if hasBloc || hasScreen || hasRepository {
+			groupedPatternHits++
+		}
+
+		return nil
+	})
 	if err != nil {
 		return "flat", nil
 	}
 
-	cleanArch := map[string]bool{"presentation": false, "domain": false, "data": false}
-	grouped := map[string]bool{"bloc": false, "screen": false, "repository": false}
-
-	for _, entry := range entries {
-		if !entry.IsDir() || excludedDirs[entry.Name()] {
-			continue
-		}
-		featureDir := filepath.Join(featureRoot, entry.Name())
-		subs, err := os.ReadDir(featureDir)
-		if err != nil {
-			continue
-		}
-		for _, sub := range subs {
-			if !sub.IsDir() {
-				continue
-			}
-			name := sub.Name()
-			if _, ok := cleanArch[name]; ok {
-				cleanArch[name] = true
-			}
-			if _, ok := grouped[name]; ok {
-				grouped[name] = true
-			}
-		}
-	}
-
-	cleanCount := 0
-	for _, v := range cleanArch {
-		if v {
-			cleanCount++
-		}
-	}
-	if cleanCount >= 2 {
+	if cleanPatternHits > 0 {
 		return "clean_architecture", nil
 	}
-	if grouped["bloc"] || grouped["screen"] || grouped["repository"] {
+	if groupedPatternHits > 0 {
 		return "grouped", nil
 	}
 	return "flat", nil
@@ -109,4 +143,81 @@ func DetectTestRoot(rootDir, projectType string) (string, error) {
 		}
 	}
 	return "test", nil
+}
+
+// AnalyzeAllFeatures scans all feature directories and returns their info and detected patterns.
+func AnalyzeAllFeatures(featureRoot string) ([]models.FeatureInfo, error) {
+	var features []models.FeatureInfo
+
+	entries, err := os.ReadDir(featureRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		featurePath := filepath.Join(featureRoot, entry.Name())
+		structure := detectSingleFeatureStructure(featurePath)
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		features = append(features, models.FeatureInfo{
+			Name:         entry.Name(),
+			Structure:    structure,
+			LastModified: info.ModTime().Format(time.RFC3339),
+			Path:         featurePath,
+		})
+	}
+
+	return features, nil
+}
+
+// detectSingleFeatureStructure checks a single feature directory and returns its structure type.
+func detectSingleFeatureStructure(featurePath string) string {
+	entries, err := os.ReadDir(featurePath)
+	if err != nil {
+		return "flat"
+	}
+
+	hasPresentation := false
+	hasDomain := false
+	hasData := false
+	hasBloc := false
+	hasScreen := false
+	hasRepository := false
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		switch entry.Name() {
+		case "presentation":
+			hasPresentation = true
+		case "domain":
+			hasDomain = true
+		case "data":
+			hasData = true
+		case "bloc":
+			hasBloc = true
+		case "screen":
+			hasScreen = true
+		case "repository":
+			hasRepository = true
+		}
+	}
+
+	if hasPresentation && (hasDomain || hasData) {
+		return "clean_architecture"
+	}
+	if hasBloc || hasScreen || hasRepository {
+		return "grouped"
+	}
+	return "flat"
 }

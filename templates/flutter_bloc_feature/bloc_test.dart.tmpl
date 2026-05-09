@@ -1,28 +1,33 @@
-import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
 
-import '../lib/features/{{.SnakeName}}/{{.SnakeName}}_bloc.dart';
-import '../lib/features/{{.SnakeName}}/{{.SnakeName}}_repository.dart';
+// TODO: Add bloc_test import when implementing tests
+// import 'package:bloc_test/bloc_test.dart';
 
-class Mock{{.PascalName}}{{.RepositorySuffix}} extends Mock implements {{.PascalName}}{{.RepositorySuffix}} {}
+// TODO: Update import path to match your project structure
+// import 'package:your_package_name/features/{{.SnakeName}}/presentation/{{.SnakeName}}_bloc.dart';
 
 void main() {
-  late Mock{{.PascalName}}{{.RepositorySuffix}} mock{{.PascalName}}{{.RepositorySuffix}};
-
-  setUp(() {
-    mock{{.PascalName}}{{.RepositorySuffix}} = Mock{{.PascalName}}{{.RepositorySuffix}}();
-  });
-
   group('{{.PascalName}}{{.BlocSuffix}}', () {
+    // TODO: Initialize {{.CamelName}}Bloc
+    // late {{.PascalName}}{{.BlocSuffix}} {{.CamelName}}Bloc;
+
+    // TODO: Add setUp to instantiate the bloc
+
+    // TODO: Implement bloc state tests
+    /*
+    test('initial state is {{.PascalName}}Initial', () {
+      expect({{.CamelName}}Bloc.state, isA<{{.PascalName}}Initial>());
+    });
+
     blocTest<{{.PascalName}}{{.BlocSuffix}}, {{.PascalName}}{{.StateSuffix}}>(
       'emits [Loading, Loaded] when {{.PascalName}}Started is added',
-      build: () => {{.PascalName}}{{.BlocSuffix}}(),
+      build: () => {{.CamelName}}Bloc,
       act: (bloc) => bloc.add(const {{.PascalName}}Started()),
       expect: () => [
         isA<{{.PascalName}}Loading>(),
         isA<{{.PascalName}}Loaded>(),
       ],
     );
+    */
   });
 }

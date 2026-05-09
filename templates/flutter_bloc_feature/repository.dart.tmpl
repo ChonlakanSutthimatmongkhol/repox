@@ -1,5 +1,5 @@
-import '{{.SnakeName}}_request.dart';
-import '{{.SnakeName}}_response.dart';
+import '../../data/models/{{.SnakeName}}_request.dart';
+import '../../data/models/{{.SnakeName}}_response.dart';
 
 abstract class {{.PascalName}}{{.RepositorySuffix}} {
   Future<{{.PascalName}}Response> fetch({{.PascalName}}Request request);

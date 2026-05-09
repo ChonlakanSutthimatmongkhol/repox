@@ -71,6 +71,16 @@ func saveScanResult(cmd *cobra.Command, conv *models.Convention) error {
 		return fmt.Errorf("scan: save conventions: %w", err)
 	}
 
+	// Analyze all features to build pattern distribution and mappings
+	cwd, err := os.Getwd()
+	if err == nil && conv.FeatureRoot != "" {
+		featureRootPath := cwd + "/" + conv.FeatureRoot
+		if features, err := scanner.AnalyzeAllFeatures(featureRootPath); err == nil {
+			analysis := buildFeaturesAnalysis(features)
+			conv.FeaturesAnalysis = analysis
+		}
+	}
+
 	// Update config.json with detected project type and feature root.
 	cfg, err := config.Load[models.Config](config.RepoxPath("config.json"))
 	if err == nil {
@@ -82,13 +92,17 @@ func saveScanResult(cmd *cobra.Command, conv *models.Convention) error {
 	}
 
 	// Index existing features and save examples.json.
-	cwd, err := os.Getwd()
-	if err == nil {
+	if cwd, err := os.Getwd(); err == nil {
 		examples, idxErr := retriever.IndexFeatures(cwd, conv)
 		if idxErr == nil && len(examples) > 0 {
 			_ = config.Save(config.RepoxPath("examples.json"), examples)
 			fmt.Fprintf(cmd.OutOrStdout(), "  Indexed %d features\n", len(examples))
 		}
+	}
+
+	// Save updated convention with features analysis
+	if err := config.Save(config.RepoxPath("conventions.json"), conv); err != nil {
+		return fmt.Errorf("scan: save conventions: %w", err)
 	}
 
 	printScanSummary(cmd, conv)
@@ -111,4 +125,70 @@ func printScanSummary(cmd *cobra.Command, conv *models.Convention) {
 	fmt.Fprintf(out, "    State suffix:    %s\n", conv.Naming.StateSuffix)
 	fmt.Fprintf(out, "  Routing:           %s (%s)\n", conv.Routing.Type, conv.Routing.RouteFile)
 	fmt.Fprintf(out, "  Common imports:    %d detected\n", len(conv.CommonImports))
+
+	if len(conv.FeaturesAnalysis.Features) > 0 {
+		fmt.Fprintf(out, "  Features:          %d detected\n", conv.FeaturesAnalysis.TotalFeatures)
+		fmt.Fprintf(out, "    Recommended:   %s\n", conv.FeaturesAnalysis.RecommendedPattern)
+	}
+}
+
+// buildFeaturesAnalysis constructs a FeaturesAnalysis from detected features.
+func buildFeaturesAnalysis(features []models.FeatureInfo) models.FeaturesAnalysis {
+	analysis := models.FeaturesAnalysis{
+		TotalFeatures:       len(features),
+		PatternDistribution: make(map[string]int),
+		Features:            features,
+		PatternMappings:     make(map[string][]models.PatternMapping),
+	}
+
+	// Count pattern distribution
+	for _, f := range features {
+		analysis.PatternDistribution[f.Structure]++
+	}
+
+	// Find recommended pattern (most frequent)
+	var recommended string
+	maxCount := 0
+	for pattern, count := range analysis.PatternDistribution {
+		if count > maxCount {
+			maxCount = count
+			recommended = pattern
+		}
+	}
+	analysis.RecommendedPattern = recommended
+
+	// Set latest pattern (last feature's pattern)
+	if len(features) > 0 {
+		analysis.LatestPattern = features[len(features)-1].Structure
+	}
+
+	// Build pattern mappings for each pattern type
+	analysis.PatternMappings = buildPatternMappings()
+
+	return analysis
+}
+
+// buildPatternMappings returns the file routing mappings for all pattern types.
+func buildPatternMappings() map[string][]models.PatternMapping {
+	return map[string][]models.PatternMapping{
+		"clean_architecture": {
+			{FileName: "bloc.dart", Subdir: "presentation"},
+			{FileName: "event.dart", Subdir: "presentation"},
+			{FileName: "state.dart", Subdir: "presentation"},
+			{FileName: "screen.dart", Subdir: "presentation"},
+			{FileName: "repository.dart", Subdir: "domain/repositories"},
+			{FileName: "usecase.dart", Subdir: "domain/usecases"},
+			{FileName: "request.dart", Subdir: "data/models"},
+			{FileName: "response.dart", Subdir: "data/models"},
+			{FileName: "repository_impl.dart", Subdir: "data/repositories"},
+		},
+		"grouped": {
+			{FileName: "bloc.dart", Subdir: "bloc"},
+			{FileName: "event.dart", Subdir: "bloc"},
+			{FileName: "state.dart", Subdir: "bloc"},
+			{FileName: "screen.dart", Subdir: "screen"},
+			{FileName: "repository.dart", Subdir: "repository"},
+		},
+		"flat": {},
+	}
 }

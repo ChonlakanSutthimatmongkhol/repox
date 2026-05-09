@@ -88,6 +88,7 @@ func (g *TemplateGenerator) renderFile(tmplPath string, ctx TemplateContext) (st
 
 // outputPath derives the destination file path from the template filename.
 // Template names follow the pattern: <kind>.dart.tmpl → <snakeName>_<kind>.dart
+// Uses pattern mappings from config to route files to appropriate subdirectories.
 func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) string {
 	base := filepath.Base(tmplPath)
 	// strip .tmpl extension
@@ -95,10 +96,31 @@ func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) s
 	// prefix with snake feature name
 	outName := ctx.SnakeName + "_" + name
 
-	// bloc_test.dart → test root, everything else → feature root
+	// bloc_test.dart → test root
 	if strings.Contains(name, "test") {
 		return filepath.Join(conv.TestRoot, ctx.SnakeName, outName)
 	}
+
+	// Check if pattern mappings exist in config
+	if len(conv.FeaturesAnalysis.PatternMappings) > 0 {
+		// Get mappings for the detected/recommended pattern
+		pattern := conv.FeatureStructure
+		if pattern == "" {
+			pattern = conv.FeaturesAnalysis.RecommendedPattern
+		}
+
+		if mappings, ok := conv.FeaturesAnalysis.PatternMappings[pattern]; ok {
+			for _, m := range mappings {
+				if m.FileName == name {
+					if m.Subdir != "" {
+						return filepath.Join(conv.FeatureRoot, ctx.SnakeName, m.Subdir, outName)
+					}
+				}
+			}
+		}
+	}
+
+	// Default: no subdirectory
 	return filepath.Join(conv.FeatureRoot, ctx.SnakeName, outName)
 }
 
