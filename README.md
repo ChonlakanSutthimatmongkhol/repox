@@ -4,9 +4,9 @@
 
 > Generate feature scaffolds that look like your team wrote them — learned from real code, improved by every commit.
 
-![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Phase](https://img.shields.io/badge/Current-v0.1.0_MVP-orange?style=flat)
+![Version](https://img.shields.io/badge/Version-v0.2.0-blue?style=flat)
 
 ---
 
@@ -15,11 +15,21 @@
 Repox scans your codebase, learns your project's conventions, and generates feature scaffolds that match your team's style. No more copy-pasting from old features. No more writing AI instructions from scratch for every repo.
 
 ```bash
-repox init          # Initialize Repox in your repo
-repox scan          # Scan and learn conventions
-repox generate feature watchlist         # Generate from template
-repox generate feature watchlist --ai    # Generate with AI assistance
-repox learn         # Learn from your edits
+# 1. Initialize in your Flutter/Go repo
+repox init
+
+# 2. Scan and detect conventions automatically
+repox scan
+
+# 3. Generate a feature scaffold matching your conventions
+repox generate feature watchlist
+
+# 4. Preview without writing
+repox generate feature watchlist --dry-run
+
+# Coming soon
+repox generate feature watchlist --ai    # AI-assisted generation
+repox learn                              # Learn from your edits
 ```
 
 ---
@@ -178,43 +188,34 @@ repox/
 │       └── main.go                 # Entry point
 ├── internal/
 │   ├── cli/
-│   │   ├── root.go                 # Root command
+│   │   ├── root.go                 # Root command, --version
 │   │   ├── init.go                 # repox init
-│   │   ├── scan.go                 # repox scan
-│   │   ├── generate.go             # repox generate
-│   │   └── learn.go                # repox learn
-│   ├── scanner/
+│   │   ├── scan.go                 # repox scan          ✅ v0.2.0
+│   │   └── generate.go             # repox generate
+│   ├── scanner/                    #                     ✅ v0.2.0
 │   │   ├── scanner.go              # Scanner interface
-│   │   ├── flutter_scanner.go      # Flutter project scanner
-│   │   ├── go_scanner.go           # Go project scanner (future)
-│   │   ├── folder_scanner.go       # Folder structure detection
-│   │   └── naming_scanner.go       # Naming convention detection
+│   │   ├── flutter_scanner.go      # Flutter orchestrator
+│   │   ├── go_scanner.go           # Go scanner (stub, v0.3.0)
+│   │   ├── project_detector.go     # flutter/go/node detection
+│   │   ├── folder_scanner.go       # Feature root & structure
+│   │   ├── naming_scanner.go       # Suffix detection (majority vote)
+│   │   ├── import_scanner.go       # Common import ranking
+│   │   └── routing_scanner.go      # State mgmt & routing
 │   ├── generator/
-│   │   ├── generator.go            # Generator interface
-│   │   ├── template_generator.go   # Template-based generation
-│   │   ├── ai_generator.go         # AI-assisted generation
+│   │   ├── naming.go               # ToSnakeCase, ToPascalCase, ToCamelCase
+│   │   ├── template_generator.go   # embed.FS template rendering
 │   │   └── file_writer.go          # Safe file writer
-│   ├── retriever/
-│   │   ├── retriever.go            # Example retriever interface
-│   │   ├── feature_indexer.go      # Index existing features
-│   │   └── similarity.go           # Similarity scoring
-│   ├── learner/
-│   │   ├── learner.go              # Learner interface
-│   │   ├── diff_reader.go          # Git diff reader
-│   │   └── lesson_extractor.go     # Extract lessons from diff
-│   ├── ai/
-│   │   ├── client.go               # AI provider interface
-│   │   ├── anthropic.go            # Anthropic implementation
-│   │   ├── prompt_builder.go       # Build prompts from context
-│   │   └── response_parser.go      # Parse structured AI response
+│   ├── retriever/                  # Example retrieval (v0.3.0)
+│   ├── learner/                    # Self-learning loop (v0.5.0)
+│   ├── ai/                         # AI generation (v0.4.0)
 │   ├── config/
-│   │   ├── config.go               # Config types
-│   │   └── loader.go               # Load/save config files
+│   │   └── loader.go               # Generic Load[T]/Save[T], defaults
 │   └── models/
-│       ├── convention.go           # Convention types
-│       ├── example.go              # Example types
-│       ├── lesson.go               # Lesson types
-│       └── generation.go           # Generation log types
+│       ├── convention.go           # Convention, NamingConvention, RoutingConfig
+│       ├── config.go               # Config, AIConfig
+│       ├── example.go              # Example
+│       ├── lesson.go               # Lesson
+│       └── generation.go           # Generation log
 ├── templates/
 │   └── flutter_bloc_feature/
 │       ├── screen.dart.tmpl
@@ -292,37 +293,44 @@ repox/
 
 ---
 
-## 📦 Generated Output Example
+## 📦 Usage Examples
+
+### `repox scan`
 
 ```bash
-repox generate feature watchlist
+$ repox scan
+Scanned repository:
+  Project type:      flutter
+  State management:  flutter_bloc
+  Feature root:      lib/features
+  Feature structure: clean_architecture
+  Test root:         test/features
+  Naming:
+    Screen suffix:   Screen
+    Bloc suffix:     Bloc
+    Event suffix:    Event
+    State suffix:    State
+  Routing:           go_router (lib/router/app_router.dart)
+  Common imports:    5 detected
+
+Conventions saved to .repox/conventions.json
 ```
 
+### `repox generate feature watchlist`
+
 ```
-✅ Generated 10 files for feature: watchlist
+  created lib/features/watchlist/watchlist_bloc.dart
+  created lib/features/watchlist/watchlist_event.dart
+  created lib/features/watchlist/watchlist_state.dart
+  created lib/features/watchlist/watchlist_screen.dart
+  created lib/features/watchlist/watchlist_repository.dart
+  created lib/features/watchlist/watchlist_repository_impl.dart
+  created lib/features/watchlist/watchlist_usecase.dart
+  created lib/features/watchlist/watchlist_request.dart
+  created lib/features/watchlist/watchlist_response.dart
+  created test/features/watchlist/watchlist_bloc_test.dart
 
-  lib/features/watchlist/
-  ├── presentation/
-  │   ├── screen/
-  │   │   └── watchlist_screen.dart
-  │   └── bloc/
-  │       ├── watchlist_bloc.dart
-  │       ├── watchlist_event.dart
-  │       └── watchlist_state.dart
-  ├── domain/
-  │   ├── usecase/
-  │   │   └── get_watchlist_usecase.dart
-  │   └── repository/
-  │       └── watchlist_repository.dart
-  └── data/
-      ├── repository/
-      │   └── watchlist_repository_impl.dart
-      └── model/
-          ├── watchlist_request.dart
-          └── watchlist_response.dart
-
-  test/features/watchlist/
-  └── watchlist_bloc_test.dart
+10 created, 0 skipped
 ```
 
 ---
@@ -340,29 +348,29 @@ repox generate feature watchlist
 
 ## 🗺️ Roadmap
 
-### v0.1.0 — Template Generator MVP
+### ✅ v0.1.0 — Template Generator MVP _(released 2026-05-09)_
 
 > Goal: `repox generate feature watchlist` ทำงานได้โดยไม่ต้องใช้ AI
 
-- CLI skeleton (init, generate)
-- Go `text/template` engine with `embed.FS`
-- Flutter BLoC feature template
-- Naming conversion (snake_case, PascalCase, camelCase)
-- File writer with `--force` / `--dry-run` protection
-- Config: `.repox/config.json`
+- ✅ CLI skeleton (init, generate)
+- ✅ Go `text/template` engine with `embed.FS`
+- ✅ Flutter BLoC feature template (10 files)
+- ✅ Naming conversion (snake_case, PascalCase, camelCase)
+- ✅ File writer with `--force` / `--dry-run` protection
+- ✅ Config: `.repox/config.json`
 
-### v0.2.0 — Repo Scanner
+### ✅ v0.2.0 — Repo Scanner _(released 2026-05-09)_
 
 > Goal: `repox scan` อ่าน repo แล้วสร้าง conventions.json อัตโนมัติ
 
-- Detect project type (Flutter, Go)
-- Detect feature root & folder structure
-- Detect state management (BLoC, Cubit, Riverpod)
-- Detect naming conventions from existing files
-- Detect routing (go_router, auto_route)
-- Detect common imports & design system packages
-- Generate `.repox/conventions.json`
-- Generate uses conventions for smarter scaffolding
+- ✅ Detect project type (Flutter, Go, Node)
+- ✅ Detect feature root & folder structure (clean_architecture / grouped / flat)
+- ✅ Detect state management (BLoC, Cubit, Riverpod, Provider)
+- ✅ Detect naming conventions from existing files (majority vote)
+- ✅ Detect routing (go_router, auto_route) + route file path
+- ✅ Detect common imports (top 10 by frequency)
+- ✅ Write `.repox/conventions.json`
+- ✅ `repox generate` uses scanned conventions automatically
 
 ### v0.3.0 — Example Retrieval
 
