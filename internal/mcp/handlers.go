@@ -185,6 +185,7 @@ func formatPatternAnalysis(analysis models.FeaturesAnalysis) string {
 	fmt.Fprintf(&b, "  Recommended pattern: %s\n", analysis.RecommendedPattern)
 	fmt.Fprintf(&b, "  Latest pattern:      %s\n", analysis.LatestPattern)
 	formatNestedFlows(&b, analysis.Features)
+	formatRoleAnatomy(&b, analysis.RoleAnatomy)
 	fmt.Fprintln(&b, "\nNext step:\n  repox generate feature <name-or-path>")
 	return b.String()
 }
@@ -213,6 +214,45 @@ func formatNestedFlows(b *strings.Builder, features []models.FeatureAnalysis) {
 		sort.Strings(roles)
 		fmt.Fprintf(b, "    - %s [%s]\n", feature.Path, strings.Join(roles, ", "))
 	}
+}
+
+func formatRoleAnatomy(b *strings.Builder, roleAnatomy map[string]models.RoleAnatomy) {
+	if len(roleAnatomy) == 0 {
+		return
+	}
+	roles := make([]string, 0, len(roleAnatomy))
+	for role := range roleAnatomy {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	fmt.Fprintf(b, "  Role anatomy:       %d roles\n", len(roles))
+	limit := len(roles)
+	if limit > 5 {
+		limit = 5
+	}
+	for i := 0; i < limit; i++ {
+		role := roles[i]
+		anatomy := roleAnatomy[role]
+		fmt.Fprintf(b, "    - %s: %d files", role, anatomy.FeatureCount)
+		if len(anatomy.BaseClasses) > 0 {
+			fmt.Fprintf(b, ", base %s", anatomy.BaseClasses[0].Name)
+		}
+		if len(anatomy.Methods) > 0 {
+			fmt.Fprintf(b, ", methods %s", strings.Join(anatomyVoteNames(anatomy.Methods, 3), ", "))
+		}
+		fmt.Fprintln(b)
+	}
+}
+
+func anatomyVoteNames(votes []models.AnatomyVote, limit int) []string {
+	if len(votes) < limit {
+		limit = len(votes)
+	}
+	names := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		names = append(names, votes[i].Name)
+	}
+	return names
 }
 
 func saveSnapshotMCP(genID string, files []generator.GeneratedFile, baseDir string) string {

@@ -261,19 +261,43 @@ func TestFlutterScanner_Scan(t *testing.T) {
 
 func TestAnalyzeFeatureRoot_DetectsNestedFlowFeature(t *testing.T) {
 	dir := t.TempDir()
+	blocContent := `import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:investment_module/core/base/bloc/base_event.dart';
+
+class FundListBloc extends BaseBloc<FundListEvent, FundListState> {
+  FundListBloc(GetFundListUseCase getFundListUseCase, FundListAnalytics analytics);
+
+  Future<void> _onStarted(FundListStarted event, Emitter<FundListState> emit) async {}
+}
+`
+	screenContent := `import 'package:flutter/material.dart';
+import 'package:investment_module/core/base/bloc/base_bloc_screen.dart';
+
+class FundListScreen extends BaseBlocScreen<FundListBloc, FundListState> {
+  @override
+  FundListBloc createBloc(BuildContext context) => FundListBloc();
+
+  @override
+  Widget buildContent(BuildContext context, FundListState state) => const SizedBox();
+}
+`
+	analyticsContent := `class FundListAnalytics {
+  void trackScreenView() {}
+}
+`
 	files := []string{
-		"lib/features/investment/fund_list/presentation/screen/fund_list_screen.dart",
-		"lib/features/investment/fund_list/presentation/bloc/fund_list_bloc.dart",
 		"lib/features/investment/fund_list/presentation/bloc/fund_list_event.dart",
 		"lib/features/investment/fund_list/presentation/bloc/fund_list_state.dart",
 		"lib/features/investment/fund_list/domain/repositories/fund_list_repository.dart",
 		"lib/features/investment/fund_list/data/repositories/fund_list_repository_impl.dart",
-		"lib/features/investment/fund_list/presentation/firebase/fund_list_screen_analytics.dart",
 		"lib/features/investment/fund_detail/fund_detail_screen.dart",
 	}
 	for _, f := range files {
 		writeFile(t, filepath.Join(dir, f), "")
 	}
+	writeFile(t, filepath.Join(dir, "lib/features/investment/fund_list/presentation/screen/fund_list_screen.dart"), screenContent)
+	writeFile(t, filepath.Join(dir, "lib/features/investment/fund_list/presentation/bloc/fund_list_bloc.dart"), blocContent)
+	writeFile(t, filepath.Join(dir, "lib/features/investment/fund_list/presentation/firebase/fund_list_screen_analytics.dart"), analyticsContent)
 
 	analysis, err := AnalyzeFeatureRoot(dir, "lib/features")
 	require.NoError(t, err)
@@ -294,6 +318,23 @@ func TestAnalyzeFeatureRoot_DetectsNestedFlowFeature(t *testing.T) {
 	assert.Equal(t, "presentation/screen", fundList.FileRoutes["screen"])
 	assert.NotContains(t, byPath, "lib/features/investment")
 	assert.NotContains(t, byPath, "lib/features/investment/fund_list/presentation/firebase")
+
+	blocAnatomy := fundList.Anatomy["bloc"]
+	assert.Contains(t, blocAnatomy.BaseClasses, "BaseBloc")
+	assert.Contains(t, blocAnatomy.Methods, "_onStarted")
+	assert.Contains(t, blocAnatomy.ConstructorDeps, "GetFundListUseCase")
+	assert.Contains(t, blocAnatomy.ConstructorDeps, "FundListAnalytics")
+	assert.NotContains(t, blocAnatomy.ConstructorDeps, "FundListBloc")
+
+	screenAnatomy := fundList.Anatomy["screen"]
+	assert.Contains(t, screenAnatomy.BaseClasses, "BaseBlocScreen")
+	assert.Contains(t, screenAnatomy.Methods, "createBloc")
+	assert.Contains(t, screenAnatomy.Methods, "buildContent")
+
+	require.Contains(t, analysis.RoleAnatomy, "screen")
+	assert.Equal(t, 1, analysis.RoleAnatomy["screen"].FeatureCount)
+	assert.Equal(t, "BaseBlocScreen", analysis.RoleAnatomy["screen"].BaseClasses[0].Name)
+	assert.Equal(t, "buildContent", analysis.RoleAnatomy["screen"].Methods[0].Name)
 }
 
 func TestFlutterScanner_EmptyRepo(t *testing.T) {

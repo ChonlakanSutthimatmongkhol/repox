@@ -42,19 +42,54 @@ type FeaturesAnalysis struct {
 	PatternDistribution map[string]PatternDistribution `json:"pattern_distribution"`
 	RecommendedPattern  string                         `json:"recommended_pattern"`
 	LatestPattern       string                         `json:"latest_pattern"`
+	RoleAnatomy         map[string]RoleAnatomy         `json:"role_anatomy,omitempty"`
 }
 
 // FeatureAnalysis describes one feature folder under the detected feature root.
 type FeatureAnalysis struct {
-	Name         string            `json:"name"`
-	Path         string            `json:"path"`
-	Parent       string            `json:"parent,omitempty"`
-	Depth        int               `json:"depth,omitempty"`
-	Structure    string            `json:"structure"`
-	LastModified string            `json:"last_modified"`
-	FileCount    int               `json:"file_count,omitempty"`
-	Files        map[string]string `json:"files,omitempty"`
-	FileRoutes   map[string]string `json:"file_routes,omitempty"`
+	Name         string                 `json:"name"`
+	Path         string                 `json:"path"`
+	Parent       string                 `json:"parent,omitempty"`
+	Depth        int                    `json:"depth,omitempty"`
+	Structure    string                 `json:"structure"`
+	LastModified string                 `json:"last_modified"`
+	FileCount    int                    `json:"file_count,omitempty"`
+	Files        map[string]string      `json:"files,omitempty"`
+	FileRoutes   map[string]string      `json:"file_routes,omitempty"`
+	Anatomy      map[string]FileAnatomy `json:"anatomy,omitempty"`
+}
+
+// FileAnatomy captures the structural shape of one role file.
+type FileAnatomy struct {
+	Role                string   `json:"role"`
+	Path                string   `json:"path"`
+	ClassNames          []string `json:"class_names,omitempty"`
+	BaseClasses         []string `json:"base_classes,omitempty"`
+	Mixins              []string `json:"mixins,omitempty"`
+	Methods             []string `json:"methods,omitempty"`
+	ConstructorDeps     []string `json:"constructor_deps,omitempty"`
+	Imports             []string `json:"imports,omitempty"`
+	Capabilities        []string `json:"capabilities,omitempty"`
+	HasFirebaseTracking bool     `json:"has_firebase_tracking,omitempty"`
+}
+
+// RoleAnatomy summarizes common anatomy for a role across discovered features.
+type RoleAnatomy struct {
+	FeatureCount        int           `json:"feature_count"`
+	BaseClasses         []AnatomyVote `json:"base_classes,omitempty"`
+	Mixins              []AnatomyVote `json:"mixins,omitempty"`
+	Methods             []AnatomyVote `json:"methods,omitempty"`
+	ConstructorDeps     []AnatomyVote `json:"constructor_deps,omitempty"`
+	Imports             []AnatomyVote `json:"imports,omitempty"`
+	Capabilities        []AnatomyVote `json:"capabilities,omitempty"`
+	HasFirebaseTracking AnatomyVote   `json:"has_firebase_tracking,omitempty"`
+}
+
+// AnatomyVote stores how often an anatomy item appears.
+type AnatomyVote struct {
+	Name       string  `json:"name,omitempty"`
+	Count      int     `json:"count"`
+	Percentage float64 `json:"percentage"`
 }
 
 // PatternDistribution stores the count and percentage for a feature structure.

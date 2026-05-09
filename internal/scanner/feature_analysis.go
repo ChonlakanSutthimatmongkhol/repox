@@ -47,6 +47,7 @@ func AnalyzeFeatureRoot(rootDir, featureRoot string) (models.FeaturesAnalysis, e
 	analysis.PatternDistribution = buildPatternDistribution(counts, len(analysis.Features))
 	analysis.RecommendedPattern = recommendedPattern(counts)
 	analysis.LatestPattern = latestFeature.Structure
+	analysis.RoleAnatomy = buildRoleAnatomy(analysis.Features)
 	return analysis, nil
 }
 
@@ -116,6 +117,7 @@ func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string) ([]mo
 		if len(files) == 0 {
 			return nil
 		}
+		anatomy := collectFeatureAnatomy(rootDir, files)
 		lastModified := latestModified(path)
 		feature := models.FeatureAnalysis{
 			Name:         filepath.Base(path),
@@ -127,6 +129,7 @@ func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string) ([]mo
 			FileCount:    len(files),
 			Files:        files,
 			FileRoutes:   routes,
+			Anatomy:      anatomy,
 		}
 		features = append(features, feature)
 

@@ -92,6 +92,39 @@ func writeConventions(b *strings.Builder, conv models.Convention) {
 		}
 		fmt.Fprintln(b)
 	}
+
+	writeRoleAnatomy(b, conv.FeaturesAnalysis.RoleAnatomy)
+}
+
+func writeRoleAnatomy(b *strings.Builder, roleAnatomy map[string]models.RoleAnatomy) {
+	if len(roleAnatomy) == 0 {
+		return
+	}
+	fmt.Fprintln(b, "Role anatomy:")
+	roles := make([]string, 0, len(roleAnatomy))
+	for role := range roleAnatomy {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	for _, role := range limitStrings(roles, 8) {
+		anatomy := roleAnatomy[role]
+		fmt.Fprintf(b, "- `%s` (%d files)", role, anatomy.FeatureCount)
+		details := []string{}
+		if len(anatomy.BaseClasses) > 0 {
+			details = append(details, "base: "+anatomy.BaseClasses[0].Name)
+		}
+		if len(anatomy.Methods) > 0 {
+			details = append(details, "methods: "+strings.Join(anatomyVoteNames(anatomy.Methods, 5), ", "))
+		}
+		if len(anatomy.Capabilities) > 0 {
+			details = append(details, "capabilities: "+strings.Join(anatomyVoteNames(anatomy.Capabilities, 3), ", "))
+		}
+		if len(details) > 0 {
+			fmt.Fprintf(b, " — %s", strings.Join(details, "; "))
+		}
+		fmt.Fprintln(b)
+	}
+	fmt.Fprintln(b)
 }
 
 func writeExamples(b *strings.Builder, examples []models.Example) {
@@ -178,6 +211,17 @@ func limitStrings(values []string, max int) []string {
 		return values
 	}
 	return values[:max]
+}
+
+func anatomyVoteNames(votes []models.AnatomyVote, limit int) []string {
+	if len(votes) < limit {
+		limit = len(votes)
+	}
+	names := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		names = append(names, votes[i].Name)
+	}
+	return names
 }
 
 func emptyDefault(value, fallback string) string {
