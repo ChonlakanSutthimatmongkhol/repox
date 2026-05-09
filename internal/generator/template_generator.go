@@ -119,11 +119,6 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 			continue
 		}
 		outPath := outputPath(entry, ctx, conv)
-		if content, ok := renderLikeFeatureFile(kind, ctx, conv, opts); ok {
-			out = append(out, GeneratedFile{Path: outPath, Content: content})
-			generatedRoles[kind] = true
-			continue
-		}
 		fileCtx := ctx.withImportsFor(outPath, conv)
 		content, err := g.renderFile(entry, fileCtx)
 		if err != nil {
@@ -155,25 +150,6 @@ func conventionWithLikeTarget(conv *models.Convention, ctx TemplateContext, opts
 		convCopy.FeatureStructure = liked.Structure
 	}
 	return &convCopy
-}
-
-func renderLikeFeatureFile(kind string, ctx TemplateContext, conv *models.Convention, opts GenerateOptions) (string, bool) {
-	if opts.LikeFeature == nil || strings.TrimSpace(opts.BaseDir) == "" {
-		return "", false
-	}
-	sourcePath := likeFeatureFilePath(*opts.LikeFeature, kind)
-	if sourcePath == "" {
-		return "", false
-	}
-	return renderLikeSourcePath(sourcePath, ctx, conv, opts)
-}
-
-func likeFeatureFilePath(feature models.FeatureAnalysis, kind string) string {
-	files := likeFeatureFiles(feature, "")
-	if path := strings.TrimSpace(files[kind]); path != "" {
-		return path
-	}
-	return ""
 }
 
 func renderLikeAncillaryFiles(ctx TemplateContext, conv *models.Convention, opts GenerateOptions, allowedRoles map[string]bool, generatedRoles map[string]bool) []GeneratedFile {

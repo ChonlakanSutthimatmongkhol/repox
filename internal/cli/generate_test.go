@@ -137,14 +137,6 @@ func TestGenerateFeature_RolesDryRun(t *testing.T) {
 
 func TestGenerateFeature_LikeUsesFeatureShape(t *testing.T) {
 	dir := setupInitDir(t)
-	sourceBloc := filepath.Join(dir, "lib/features/investment/fund_list/presentation/fund_list_bloc.dart")
-	require.NoError(t, os.MkdirAll(filepath.Dir(sourceBloc), 0o755))
-	require.NoError(t, os.WriteFile(sourceBloc, []byte(`class FundListBloc extends BaseBlocScreen<FundListEvent, FundListState> {
-  BaseTrackingLandedEvent createBaseTrackingLandedEvent() {
-    return FundListTrackLandingEvent();
-  }
-}
-`), 0o644))
 
 	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
 	require.NoError(t, err)
@@ -166,6 +158,10 @@ func TestGenerateFeature_LikeUsesFeatureShape(t *testing.T) {
 				"event":  "presentation",
 				"screen": "presentation",
 				"state":  "presentation",
+			},
+			Anatomy: map[string]models.FileAnatomy{
+				"bloc":   {Role: "bloc", BaseClasses: []string{"BaseBlocScreen"}},
+				"screen": {Role: "screen", BaseClasses: []string{"BaseStatefulWidget", "BaseState"}},
 			},
 		},
 		{
@@ -211,9 +207,13 @@ func TestGenerateFeature_LikeUsesFeatureShape(t *testing.T) {
 
 	generatedBloc, err := os.ReadFile(filepath.Join(dir, "lib/features/investment/new_feature/presentation/new_feature_bloc.dart"))
 	require.NoError(t, err)
+	// Base class comes from anatomy, not from copying source file
 	assert.Contains(t, string(generatedBloc), "class NewFeatureBloc extends BaseBlocScreen<NewFeatureEvent, NewFeatureState>")
-	assert.Contains(t, string(generatedBloc), "return NewFeatureTrackLandingEvent();")
+	// Clean template stub — no fund_list business logic copied over
 	assert.NotContains(t, string(generatedBloc), "FundList")
+	assert.NotContains(t, string(generatedBloc), "TrackLanding")
+	// UseCase wired in constructor
+	assert.Contains(t, string(generatedBloc), "NewFeatureUseCase")
 }
 
 func TestRolesForLikeFeature_IncludesCleanArchitectureLayers(t *testing.T) {

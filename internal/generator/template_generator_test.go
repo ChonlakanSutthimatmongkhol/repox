@@ -1,8 +1,6 @@
 package generator
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -190,27 +188,12 @@ func TestGenerateWithOptions_FiltersRoles(t *testing.T) {
 	}
 }
 
-func TestGenerateWithOptions_LikeFeatureRewritesSourceFiles(t *testing.T) {
+func TestGenerateWithOptions_LikeFeatureUsesTemplateNotSource(t *testing.T) {
+	// --like should generate clean template stubs for known roles (bloc, screen, etc.)
+	// rather than copying source files. Base classes come from anatomy, not the source file.
+	// Ancillary files that have no template are still copy-renamed from the source.
 	gen := NewTemplateGenerator()
 	baseDir := t.TempDir()
-	sourcePath := filepath.Join(baseDir, "lib/features/investment/fund_list/presentation/fund_list_bloc.dart")
-	require.NoError(t, os.MkdirAll(filepath.Dir(sourcePath), 0o755))
-	require.NoError(t, os.WriteFile(sourcePath, []byte(`import 'package:investment_module/features/investment/fund_list/presentation/fund_list_event.dart';
-import 'package:investment_module/common/widgets/shared_fund_list_item/shared_fund_list_item_widget.dart';
-import 'package:investment_module/features/investment/dashboard/domain/usecase/get_highlight_fund_details_usecase.dart';
-
-class FundListBloc extends BaseBlocScreen<FundListEvent, FundListState> {
-  FundListBloc() : super(FundListInitialState());
-
-  BaseTrackingLandedEvent createBaseTrackingLandedEvent() {
-    return FundListTrackLandingEvent();
-  }
-
-  SharedFundListItemWidget buildSharedWidget() {
-    return SharedFundListItemWidget();
-  }
-}
-`), 0o644))
 
 	conv := config.DefaultConventions()
 	conv.FeatureStructure = "flat"
@@ -224,6 +207,12 @@ class FundListBloc extends BaseBlocScreen<FundListEvent, FundListState> {
 		FileRoutes: map[string]string{
 			"bloc": "presentation",
 		},
+		Anatomy: map[string]models.FileAnatomy{
+			"bloc": {
+				Role:        "bloc",
+				BaseClasses: []string{"BaseBlocScreen"},
+			},
+		},
 	}
 	conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{like}
 
@@ -236,17 +225,13 @@ class FundListBloc extends BaseBlocScreen<FundListEvent, FundListState> {
 	require.Len(t, files, 1)
 
 	assert.Equal(t, "lib/features/investment/new_feature/presentation/new_feature_bloc.dart", files[0].Path)
-	// Source file identifiers are renamed
+	// Base class comes from anatomy, not source file
 	assert.Contains(t, files[0].Content, "class NewFeatureBloc extends BaseBlocScreen<NewFeatureEvent, NewFeatureState>")
-	assert.Contains(t, files[0].Content, "return NewFeatureTrackLandingEvent();")
-	// Own-feature import is renamed
-	assert.Contains(t, files[0].Content, "investment/new_feature/presentation/new_feature_event.dart")
-	// Shared (non-feature) import is preserved
-	assert.Contains(t, files[0].Content, "common/widgets/shared_fund_list_item/shared_fund_list_item_widget.dart")
-	assert.Contains(t, files[0].Content, "SharedFundListItemWidget")
-	// Cross-feature import from dashboard is stripped
+	// Template generates clean stub — no fund_list business logic
+	assert.NotContains(t, files[0].Content, "FundList")
 	assert.NotContains(t, files[0].Content, "dashboard")
-	assert.NotContains(t, files[0].Content, "GetHighlightFundDetailsUseCase")
+	// UseCase is wired in constructor
+	assert.Contains(t, files[0].Content, "NewFeatureUseCase")
 }
 
 func TestGenerate_UnknownTemplate(t *testing.T) {
