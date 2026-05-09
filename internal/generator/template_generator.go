@@ -114,6 +114,17 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 	}
 
 	allowedRoles := roleSet(opts.Roles)
+
+	// Pre-compute which roles will be rendered so templates can conditionally
+	// inject dependencies (e.g. usecase) only when those roles are actually generated.
+	activeRoles := map[string]bool{}
+	for _, entry := range entries {
+		kind := templateKind(entry)
+		if len(allowedRoles) == 0 || allowedRoles[kind] {
+			activeRoles[kind] = true
+		}
+	}
+
 	generatedRoles := map[string]bool{}
 	var out []GeneratedFile
 	for _, entry := range entries {
@@ -122,7 +133,7 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 			continue
 		}
 		outPath := outputPath(entry, ctx, conv)
-		fileCtx := ctx.withImportsFor(outPath, conv)
+		fileCtx := ctx.withImportsFor(outPath, conv, activeRoles)
 		content, err := g.renderFile(entry, fileCtx)
 		if err != nil {
 			return nil, err
@@ -159,7 +170,7 @@ func renderLikeAncillaryFiles(ctx TemplateContext, conv *models.Convention, opts
 	if opts.LikeFeature == nil || strings.TrimSpace(opts.BaseDir) == "" {
 		return nil
 	}
-	files := likeFeatureFiles(*opts.LikeFeature, opts.BaseDir)
+	files := likeFeatureFiles(*opts.LikeFeature, opts.BaseDir, conv.Naming)
 	roles := make([]string, 0, len(files))
 	for role := range files {
 		roles = append(roles, role)
@@ -224,7 +235,7 @@ func stripCrossFeatureImports(content string, conv *models.Convention, like mode
 	return strings.Join(out, "\n")
 }
 
-func likeFeatureFiles(feature models.FeatureAnalysis, baseDir string) map[string]string {
+func likeFeatureFiles(feature models.FeatureAnalysis, baseDir string, naming ...models.NamingConvention) map[string]string {
 	files := map[string]string{}
 	for role, path := range feature.Files {
 		if strings.TrimSpace(path) != "" {
@@ -259,7 +270,11 @@ func likeFeatureFiles(feature models.FeatureAnalysis, baseDir string) map[string
 		if ext := filepath.Ext(path); ext != ".dart" && ext != ".go" {
 			return nil
 		}
-		role := roleForLikePath(filepath.Base(feature.Path), path)
+		n := models.NamingConvention{}
+		if len(naming) > 0 {
+			n = naming[0]
+		}
+		role := roleForLikePath(filepath.Base(feature.Path), path, n)
 		if role == "" {
 			return nil
 		}
@@ -314,9 +329,9 @@ func uniqueRole(role, relPath string, files map[string]string) string {
 	}
 }
 
-func roleForLikePath(featureName, path string) string {
+func roleForLikePath(featureName, path string, naming models.NamingConvention) string {
 	filename := filepath.Base(path)
-	if role := knownTemplateRole(filename); role != "" {
+	if role := knownTemplateRole(filename, naming); role != "" {
 		return role
 	}
 	ext := filepath.Ext(filename)
@@ -331,34 +346,47 @@ func roleForLikePath(featureName, path string) string {
 	return strings.Trim(base, "_")
 }
 
-func knownTemplateRole(filename string) string {
+// knownTemplateRole maps a filename to a role using naming conventions from scan.
+// All suffix patterns come from conv.Naming — no hardcoding.
+func knownTemplateRole(filename string, naming models.NamingConvention) string {
 	base := strings.TrimSuffix(filename, filepath.Ext(filename))
-	switch {
-	case strings.HasSuffix(base, "_repository_impl"):
-		return "repository_impl"
-	case strings.HasSuffix(base, "_screen"), strings.HasSuffix(base, "_page"), strings.HasSuffix(base, "_view"):
-		return "screen"
-	case strings.HasSuffix(base, "_bloc"), strings.HasSuffix(base, "_cubit"):
-		return "bloc"
-	case strings.HasSuffix(base, "_event"):
-		return "event"
-	case strings.HasSuffix(base, "_state"):
-		return "state"
-	case strings.HasSuffix(base, "_repository"), strings.HasSuffix(base, "_repo"):
-		return "repository"
-	case strings.HasSuffix(base, "_usecase"), strings.HasSuffix(base, "_use_case"):
-		return "usecase"
-	case strings.HasSuffix(base, "_request"), strings.HasSuffix(base, "_request_model"), strings.HasSuffix(base, "_request_body"):
-		return "request"
-	case strings.HasSuffix(base, "_response"), strings.HasSuffix(base, "_response_model"):
-		return "response"
-	case strings.HasSuffix(base, "_handler"), strings.HasSuffix(base, "_controller"):
-		return "handler"
-	case strings.HasSuffix(base, "_service"):
-		return "service"
-	default:
+	check := func(suffix, role string) string {
+		if suffix == "" {
+			return ""
+		}
+		if strings.HasSuffix(base, "_"+strings.ToLower(suffix)) {
+			return role
+		}
 		return ""
 	}
+	if r := check(naming.RepositorySuffix+"Impl", "repository_impl"); r != "" {
+		return r
+	}
+	if r := check(naming.ScreenSuffix, "screen"); r != "" {
+		return r
+	}
+	if r := check(naming.BlocSuffix, "bloc"); r != "" {
+		return r
+	}
+	if r := check(naming.EventSuffix, "event"); r != "" {
+		return r
+	}
+	if r := check(naming.StateSuffix, "state"); r != "" {
+		return r
+	}
+	if r := check(naming.RepositorySuffix, "repository"); r != "" {
+		return r
+	}
+	if r := check(naming.UsecaseSuffix, "usecase"); r != "" {
+		return r
+	}
+	if r := check(naming.HandlerSuffix, "handler"); r != "" {
+		return r
+	}
+	if r := check(naming.ServiceSuffix, "service"); r != "" {
+		return r
+	}
+	return ""
 }
 
 func rewriteLikeFeaturePath(path string, ctx TemplateContext, conv *models.Convention, like models.FeatureAnalysis, baseDir string) string {
@@ -652,7 +680,7 @@ func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) Tem
 	}
 	if a, ok := like.Anatomy["bloc"]; ok && len(a.BaseClasses) > 0 {
 		ctx.BlocBaseClass = a.BaseClasses[0]
-		ctx.BlocBaseImports = append(baseClassImports(a.Imports, a.BaseClasses), abstractStubImports(a.AbstractOverrides, a.Imports)...)
+		ctx.BlocBaseImports = append(baseClassImports(a.Imports, a.BaseClasses, a.Mixins), abstractStubImports(a.AbstractOverrides, a.Imports)...)
 		ctx.BlocAbstractStubs = buildAbstractStubs(a.AbstractOverrides)
 	}
 	if a, ok := like.Anatomy["screen"]; ok {
@@ -664,28 +692,48 @@ func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) Tem
 				ctx.ScreenBaseClass = base
 			}
 		}
-		ctx.ScreenBaseImports = baseClassImports(a.Imports, a.BaseClasses)
+		ctx.ScreenBaseImports = baseClassImports(a.Imports, a.BaseClasses, a.Mixins)
 	}
 	return ctx
 }
 
 // baseClassImports filters imports to those that likely provide the given base classes.
 // It keeps imports from "core/base" paths and any import whose filename matches a base class name.
-func baseClassImports(imports []string, baseClasses []string) []string {
-	var result []string
+// baseClassImports finds imports that provide the base classes and their direct
+// dependencies — derived entirely from the scanned anatomy with no path hardcoding.
+//
+// Strategy:
+//  1. Match imports whose filename (snake_case) overlaps with any base class or mixin name.
+//  2. Expand: include all other anatomy imports that share the same directory as a matched import,
+//     because base classes often live alongside their event/state/mixin siblings.
+func baseClassImports(imports []string, baseClasses []string, mixins []string) []string {
+	allClasses := append(append([]string{}, baseClasses...), mixins...)
+
+	// Pass 1: imports whose filename matches a base class or mixin name.
+	matchedDirs := map[string]bool{}
+	matched := map[string]bool{}
 	for _, imp := range imports {
-		// Always include core/base imports — framework-level base classes
-		if strings.Contains(imp, "/core/base/") {
-			result = append(result, imp)
-			continue
-		}
-		// Include imports whose filename matches any base class name
 		impBase := strings.ToLower(strings.TrimSuffix(filepath.Base(imp), ".dart"))
-		for _, cls := range baseClasses {
+		for _, cls := range allClasses {
+			if cls == "" {
+				continue
+			}
 			if strings.Contains(impBase, strings.ToLower(ToSnakeCase(cls))) {
-				result = append(result, imp)
+				matched[imp] = true
+				matchedDirs[filepath.Dir(imp)] = true
 				break
 			}
+		}
+	}
+
+	// Pass 2: include all imports from the same directories as matched ones.
+	// This captures sibling files (e.g. base_event.dart next to base_bloc_screen.dart).
+	var result []string
+	seen := map[string]bool{}
+	for _, imp := range imports {
+		if matchedDirs[filepath.Dir(imp)] && !seen[imp] {
+			result = append(result, imp)
+			seen[imp] = true
 		}
 	}
 	return result
@@ -720,16 +768,14 @@ func abstractStubImports(overrides []string, allImports []string) []string {
 		}
 	}
 
+	seen := map[string]bool{}
 	var result []string
 	for _, imp := range allImports {
-		if strings.Contains(imp, "/core/base/") {
-			continue // already handled by baseClassImports
-		}
 		impBase := strings.ToLower(strings.TrimSuffix(filepath.Base(imp), ".dart"))
 		for typ := range typeNames {
-			// Match: snake_case of the type name appears in the import filename
-			if strings.Contains(impBase, strings.ToLower(ToSnakeCase(typ))) {
+			if strings.Contains(impBase, strings.ToLower(ToSnakeCase(typ))) && !seen[imp] {
 				result = append(result, imp)
+				seen[imp] = true
 				break
 			}
 		}
@@ -741,12 +787,16 @@ func isIdentChar(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
 }
 
-func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Convention) TemplateContext {
+func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Convention, activeRoles map[string]bool) TemplateContext {
 	ctx.BlocImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "bloc"))
-	ctx.UsecaseImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "usecase"))
 	ctx.RepositoryImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "repository"))
 	ctx.RequestImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "request"))
 	ctx.ResponseImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "response"))
+	// Only set UsecaseImport when a usecase file is actually being generated.
+	// This lets the bloc template conditionally inject the dependency.
+	if activeRoles["usecase"] {
+		ctx.UsecaseImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "usecase"))
+	}
 	return ctx
 }
 

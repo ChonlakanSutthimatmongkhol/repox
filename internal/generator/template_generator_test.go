@@ -230,8 +230,8 @@ func TestGenerateWithOptions_LikeFeatureUsesTemplateNotSource(t *testing.T) {
 	// Template generates clean stub — no fund_list business logic
 	assert.NotContains(t, files[0].Content, "FundList")
 	assert.NotContains(t, files[0].Content, "dashboard")
-	// UseCase is wired in constructor
-	assert.Contains(t, files[0].Content, "NewFeatureUseCase")
+	// No usecase injection — "usecase" is not in the generated roles
+	assert.NotContains(t, files[0].Content, "NewFeatureUseCase")
 }
 
 func TestGenerate_UnknownTemplate(t *testing.T) {

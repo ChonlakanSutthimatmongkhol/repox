@@ -10,12 +10,12 @@ part '{{.SnakeName}}_event.dart';
 part '{{.SnakeName}}_state.dart';
 
 class {{.PascalName}}{{.BlocSuffix}} extends {{if .BlocBaseClass}}{{.BlocBaseClass}}<{{.PascalName}}{{.EventSuffix}}, {{.PascalName}}{{.StateSuffix}}>{{else}}Bloc<{{.PascalName}}{{.EventSuffix}}, {{.PascalName}}{{.StateSuffix}}>{{end}} {
-  {{.PascalName}}{{.BlocSuffix}}(this._{{.CamelName}}{{.UsecaseSuffix}}) : super(const {{.PascalName}}Initial()) {
+  {{.PascalName}}{{.BlocSuffix}}({{if .UsecaseImport}}this._{{.CamelName}}{{.UsecaseSuffix}}{{end}}) : super(const {{.PascalName}}Initial()) {
     on<{{.PascalName}}Started>(_onStarted);
   }
-
+{{if .UsecaseImport}}
   final {{.PascalName}}{{.UsecaseSuffix}} _{{.CamelName}}{{.UsecaseSuffix}};
-
+{{end}}
   Future<void> _onStarted(
     {{.PascalName}}Started event,
     Emitter<{{.PascalName}}{{.StateSuffix}}> emit,
