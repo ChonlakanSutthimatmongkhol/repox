@@ -6,7 +6,7 @@
 
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Version](https://img.shields.io/badge/Version-v0.2.0-blue?style=flat)
+![Version](https://img.shields.io/badge/Version-v0.3.0-blue?style=flat)
 
 ---
 
@@ -26,6 +26,9 @@ repox generate feature watchlist
 
 # 4. Preview without writing
 repox generate feature watchlist --dry-run
+
+# 5. Find similar existing features before generating
+repox generate feature watchlist --with-examples
 
 # Coming soon
 repox generate feature watchlist --ai    # AI-assisted generation
@@ -205,7 +208,11 @@ repox/
 │   │   ├── naming.go               # ToSnakeCase, ToPascalCase, ToCamelCase
 │   │   ├── template_generator.go   # embed.FS template rendering
 │   │   └── file_writer.go          # Safe file writer
-│   ├── retriever/                  # Example retrieval (v0.3.0)
+│   ├── retriever/                  #                     ✅ v0.3.0
+│   │   ├── retriever.go            # Retriever interface
+│   │   ├── feature_indexer.go      # Walk repo and index features
+│   │   ├── similarity.go           # Score similarity between features
+│   │   └── retriever_test.go       # Tests
 │   ├── learner/                    # Self-learning loop (v0.5.0)
 │   ├── ai/                         # AI generation (v0.4.0)
 │   ├── config/
@@ -316,6 +323,17 @@ Scanned repository:
 Conventions saved to .repox/conventions.json
 ```
 
+### `repox generate feature payments --with-examples`
+
+```
+Similar features found:
+  - home (lib/features/home)
+  - profile (lib/features/profile)
+
+  created lib/features/payments/payments_bloc.dart
+  ...
+```
+
 ### `repox generate feature watchlist`
 
 ```
@@ -372,16 +390,16 @@ Conventions saved to .repox/conventions.json
 - ✅ Write `.repox/conventions.json`
 - ✅ `repox generate` uses scanned conventions automatically
 
-### v0.3.0 — Example Retrieval
+### ✅ v0.3.0 — Example Retrieval _(released 2026-05-09)_
 
 > Goal: `repox generate feature X --with-examples` ใช้ feature เก่าเป็นต้นแบบ
 
-- Index existing features in repo
-- Feature metadata extraction
-- Similarity scoring (structure, imports, patterns)
-- Top-N example selection
-- Template rendering references examples
-- Integration with ctx-saver MCP for caching examples
+- ✅ Index existing features in repo (`internal/retriever/`)
+- ✅ Feature metadata extraction (components, imports, patterns)
+- ✅ Similarity scoring (name 0.2 + structure 0.3 + imports 0.2 + patterns 0.3)
+- ✅ Top-N example selection (`FindSimilar`)
+- ✅ `repox scan` indexes features → `.repox/examples.json`
+- ✅ `--with-examples` flag prints similar features before generating
 
 ### v0.4.0 — AI-Assisted Generation
 

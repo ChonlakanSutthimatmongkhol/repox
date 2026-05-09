@@ -132,6 +132,62 @@ func TestScanCommand_ProjectOverride(t *testing.T) {
 	assert.Contains(t, buf.String(), "Warning")
 }
 
+// Integration: scan indexes features and saves examples.json
+func TestScanIndexesExamples(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	buildFlutterProjectForCLI(t, dir)
+	initForce = false
+	require.NoError(t, runInit(initCmd, nil))
+
+	scanProjectOverride = ""
+	buf := &bytes.Buffer{}
+	scanCmd.SetOut(buf)
+	require.NoError(t, runScan(scanCmd, nil))
+
+	// examples.json must exist and contain at least one entry
+	examplesPath := filepath.Join(dir, ".repox", "examples.json")
+	data, err := os.ReadFile(examplesPath)
+	require.NoError(t, err, "examples.json should be created by repox scan")
+	assert.Contains(t, string(data), "home", "examples.json should contain the 'home' feature")
+
+	// output should mention indexed features
+	assert.Contains(t, buf.String(), "Indexed")
+}
+
+// Integration: scan → index → generate --with-examples shows similar features
+func TestScanIndexGenerateWithExamples(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	buildFlutterProjectForCLI(t, dir)
+	initForce = false
+	require.NoError(t, runInit(initCmd, nil))
+
+	scanProjectOverride = ""
+	scanCmd.SetOut(&bytes.Buffer{})
+	require.NoError(t, runScan(scanCmd, nil))
+
+	// Generate with --with-examples; existing features (home, profile) should appear
+	generateForce = false
+	generateDryRun = false
+	generateTemplate = ""
+	generateWithExamples = true
+	defer func() { generateWithExamples = false }()
+
+	buf := &bytes.Buffer{}
+	generateFeatureCmd.SetOut(buf)
+	err := runGenerateFeature(generateFeatureCmd, []string{"payments"})
+	require.NoError(t, err)
+
+	out := buf.String()
+	// Should print at least one similar feature header (home or profile indexed)
+	assert.Contains(t, out, "Similar features found:")
+	// Should still generate files
+	assert.Contains(t, out, "created")
+}
+
 // Integration: scan then generate uses scanned conventions
 func TestScanThenGenerate_UsesScannedConventions(t *testing.T) {
 	dir := t.TempDir()

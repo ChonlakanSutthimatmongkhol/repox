@@ -8,6 +8,7 @@ import (
 
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/retriever"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/scanner"
 )
 
@@ -78,6 +79,16 @@ func saveScanResult(cmd *cobra.Command, conv *models.Convention) error {
 			cfg.FeatureRoot = conv.FeatureRoot
 		}
 		_ = config.Save(config.RepoxPath("config.json"), cfg)
+	}
+
+	// Index existing features and save examples.json.
+	cwd, err := os.Getwd()
+	if err == nil {
+		examples, idxErr := retriever.IndexFeatures(cwd, conv)
+		if idxErr == nil && len(examples) > 0 {
+			_ = config.Save(config.RepoxPath("examples.json"), examples)
+			fmt.Fprintf(cmd.OutOrStdout(), "  Indexed %d features\n", len(examples))
+		}
 	}
 
 	printScanSummary(cmd, conv)

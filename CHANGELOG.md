@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.0] — 2026-05-09
+
+### Added
+
+- **`internal/retriever` package** — indexes existing features and ranks them by similarity
+- **`IndexFeatures(rootDir, conv)`** — walks `featureRoot` first-level subdirectories and builds `Example` metadata for each feature (components, imports, patterns)
+- **`ScoreSimilarity(target, example)`** — weighted similarity score (name overlap 0.2 + component structure 0.3 + imports 0.2 + patterns 0.3)
+- **`FindSimilar(target, examples, topN)`** — returns top-N most similar features sorted by score descending
+- **`FeatureIndexer` struct** implements `Retriever` interface (`Index` + `FindSimilar`)
+- **`--with-examples` flag** on `repox generate feature` — loads (or re-indexes) examples, prints top 3 similar features before generating
+- **`repox scan` now indexes features** — runs `IndexFeatures` after convention detection and saves `.repox/examples.json`; prints `"Indexed N features"`
+- **Updated `models.Example`** — replaced stub with full struct: `Name`, `Path`, `Files` (role map), `Patterns`, `Metadata`
+- **`models.FeatureMetadata`** — `HasBloc`, `HasScreen`, `HasRepository`, `HasUseCase`, `HasTest`, `Imports`, `Structure`
+
+---
+
 ## [0.2.0] — 2026-05-09
 
 ### Added
@@ -57,5 +73,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+[0.3.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/releases/tag/v0.1.0

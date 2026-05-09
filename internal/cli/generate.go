@@ -10,12 +10,14 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/generator"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/retriever"
 )
 
 var (
-	generateForce    bool
-	generateDryRun   bool
-	generateTemplate string
+	generateForce        bool
+	generateDryRun       bool
+	generateTemplate     string
+	generateWithExamples bool
 )
 
 var generateCmd = &cobra.Command{
@@ -34,6 +36,7 @@ func init() {
 	generateFeatureCmd.Flags().BoolVarP(&generateForce, "force", "f", false, "Overwrite existing files")
 	generateFeatureCmd.Flags().BoolVar(&generateDryRun, "dry-run", false, "Preview files without writing")
 	generateFeatureCmd.Flags().StringVarP(&generateTemplate, "template", "t", "", "Template to use (overrides config)")
+	generateFeatureCmd.Flags().BoolVar(&generateWithExamples, "with-examples", false, "Find and show similar existing features before generating")
 	generateCmd.AddCommand(generateFeatureCmd)
 	rootCmd.AddCommand(generateCmd)
 }
@@ -44,6 +47,11 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	}
 
 	featureName := args[0]
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("generate: getwd: %w", err)
+	}
 
 	cfg, err := config.Load[models.Config](config.RepoxPath("config.json"))
 	if err != nil {
@@ -60,6 +68,21 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 		tmplName = generateTemplate
 	}
 
+	if generateWithExamples {
+		examples, err := config.Load[[]models.Example](config.RepoxPath("examples.json"))
+		if err != nil || len(examples) == 0 {
+			examples, _ = retriever.IndexFeatures(cwd, &conv)
+		}
+		similar := retriever.FindSimilar(featureName, examples, 3)
+		if len(similar) > 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "Similar features found:")
+			for _, ex := range similar {
+				fmt.Fprintf(cmd.OutOrStdout(), "  - %s (%s)\n", ex.Name, ex.Path)
+			}
+			fmt.Fprintln(cmd.OutOrStdout())
+		}
+	}
+
 	gen := generator.NewTemplateGenerator()
 	files, err := gen.Generate(featureName, tmplName, &conv)
 	if err != nil {
@@ -72,11 +95,6 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", f.Path)
 		}
 		return nil
-	}
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("generate: getwd: %w", err)
 	}
 
 	results, err := generator.WriteFiles(files, cwd, generateForce)
