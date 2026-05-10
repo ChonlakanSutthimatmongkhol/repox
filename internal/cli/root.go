@@ -10,7 +10,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/mcp"
 )
 
-const version = "1.0.14"
+const version = "1.0.15"
 
 var mcpMode bool
 
