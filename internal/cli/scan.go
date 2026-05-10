@@ -264,40 +264,54 @@ func anatomyVoteNames(votes []models.AnatomyVote, limit int) []string {
 	return names
 }
 
-// applyFeatureRootOverride restricts the scanned features to only those under
-// featureRoot. If featureRoot points to a single feature folder (e.g. internal/customer),
-// it uses the parent as the scan root and filters to matching features only.
+// applyFeatureRootOverride re-scans the specified feature folder with deeper anatomy
+// and replaces matching entries in conv.FeaturesAnalysis. The convention's FeatureRoot
+// is intentionally NOT changed — only the feature list is updated so that generate
+// continues to place new features in the correct location.
 func applyFeatureRootOverride(conv *models.Convention, rootDir, featureRoot string) error {
-	// Try featureRoot directly as a container of features.
-	analysis, err := scanner.AnalyzeFeatureRoot(rootDir, featureRoot, conv.Naming)
-	if err != nil || len(analysis.Features) == 0 {
-		// Fallback: treat featureRoot as a single feature — scan its parent and filter.
-		parent := filepath.Dir(featureRoot)
+	// Use the detected feature root as the scan parent so paths stay consistent.
+	parent := conv.FeatureRoot
+	if parent == "" {
+		parent = filepath.Dir(featureRoot)
 		if parent == "." {
 			parent = featureRoot
 		}
-		analysis, err = scanner.AnalyzeFeatureRoot(rootDir, parent, conv.Naming)
-		if err != nil {
-			return err
-		}
-		// Keep only features whose path starts with featureRoot.
-		var filtered []models.FeatureAnalysis
-		for _, f := range analysis.Features {
-			if f.Path == featureRoot || strings.HasPrefix(f.Path, featureRoot+"/") {
-				filtered = append(filtered, f)
-			}
-		}
-		if len(filtered) == 0 {
-			return fmt.Errorf("no features found under %q", featureRoot)
-		}
-		analysis.Features = filtered
 	}
 
-	conv.FeatureRoot = featureRoot
-	conv.FeaturesAnalysis = analysis
-	if analysis.RecommendedPattern != "" {
-		conv.FeatureStructure = analysis.RecommendedPattern
+	analysis, err := scanner.AnalyzeFeatureRoot(rootDir, parent, conv.Naming)
+	if err != nil {
+		return err
 	}
-	conv.PatternMappings = scanner.InferPatternMappings(analysis.Features, conv.PatternMappings)
+
+	// Keep only features whose path matches or is under featureRoot.
+	var focused []models.FeatureAnalysis
+	for _, f := range analysis.Features {
+		if f.Path == featureRoot || strings.HasPrefix(f.Path, featureRoot+"/") {
+			focused = append(focused, f)
+		}
+	}
+	if len(focused) == 0 {
+		return fmt.Errorf("no features found under %q", featureRoot)
+	}
+
+	// Merge: replace matching features in the existing list, keep the rest.
+	focusedPaths := map[string]models.FeatureAnalysis{}
+	for _, f := range focused {
+		focusedPaths[f.Path] = f
+	}
+	merged := make([]models.FeatureAnalysis, 0, len(conv.FeaturesAnalysis.Features))
+	for _, f := range conv.FeaturesAnalysis.Features {
+		if updated, ok := focusedPaths[f.Path]; ok {
+			merged = append(merged, updated)
+			delete(focusedPaths, f.Path)
+		} else {
+			merged = append(merged, f)
+		}
+	}
+	for _, f := range focusedPaths {
+		merged = append(merged, f)
+	}
+
+	conv.FeaturesAnalysis.Features = merged
 	return nil
 }
