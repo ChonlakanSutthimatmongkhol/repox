@@ -413,6 +413,16 @@ func rewriteLikeFeatureText(content string, ctx TemplateContext, conv *models.Co
 	for source, target := range likeFileBaseReplacements(like, baseDir, sourceSnake, targetSnake) {
 		replacements[source] = target
 	}
+	// Secondary rename: replace the "domain word" — the common non-feature-name word
+	// found in like-feature file stems (e.g. "retirement" in retirement.go,
+	// retirement_plans_repository/). Only underscore-bounded and path-bounded patterns
+	// are replaced to avoid renaming PascalCase domain-data identifiers like RetirementAge.
+	if dw := detectDomainWord(likeFeatureFiles(like, baseDir), sourceSnake); dw != "" && dw != targetSnake {
+		replacements["/"+dw+"/"] = "/" + targetSnake + "/"
+		replacements["/"+dw+"."] = "/" + targetSnake + "."
+		replacements[dw+"_"] = targetSnake + "_"
+		replacements["_"+dw] = "_" + targetSnake
+	}
 	ownedIdentifiers := likeOwnedIdentifiers(like, baseDir, content, sourcePascal, sourceCamel, sourceSnake)
 	for source, target := range likeIdentifierReplacements(ownedIdentifiers, sourcePascal, sourceCamel, sourceSnake, targetPascal, targetCamel, targetSnake) {
 		replacements[source] = target
@@ -431,6 +441,51 @@ func rewriteLikeFeatureText(content string, ctx TemplateContext, conv *models.Co
 		content = strings.ReplaceAll(content, key, replacements[key])
 	}
 	return content
+}
+
+// detectDomainWord finds the most common non-feature-name word among like-feature
+// file stems. For Go projects where files share a domain prefix (e.g. "retirement.go",
+// "retirement_plan_inputs.go"), this word becomes the secondary rename target so that
+// copy-renamed features use the new feature name in file/directory names.
+func detectDomainWord(files map[string]string, sourceSnake string) string {
+	counts := map[string]int{}
+	for _, path := range files {
+		stem := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		if strings.HasPrefix(stem, sourceSnake+"_") || stem == sourceSnake {
+			continue
+		}
+		word := firstSnakeWord(stem)
+		if word != "" && !isGenericFeatureName(word) {
+			counts[word]++
+		}
+	}
+	best, bestCount := "", 1 // require at least 2 occurrences
+	for word, count := range counts {
+		if count > bestCount || (count == bestCount && word > best) {
+			best, bestCount = word, count
+		}
+	}
+	return best
+}
+
+func firstSnakeWord(s string) string {
+	if idx := strings.Index(s, "_"); idx != -1 {
+		return s[:idx]
+	}
+	return s
+}
+
+// isGenericFeatureName returns true for common Go feature-structure words that
+// should not be treated as domain rename targets.
+func isGenericFeatureName(word string) bool {
+	switch word {
+	case "handler", "service", "repository", "option", "const", "error", "errors",
+		"logic", "model", "entity", "mock", "unit", "test", "dto", "enum",
+		"config", "client", "server", "router", "middleware", "helper",
+		"controller", "usecase", "request", "response", "delivery":
+		return true
+	}
+	return false
 }
 
 func likeFileBaseReplacements(like models.FeatureAnalysis, baseDir, sourceSnake, targetSnake string) map[string]string {
