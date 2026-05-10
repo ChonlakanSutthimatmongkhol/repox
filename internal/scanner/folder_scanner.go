@@ -23,7 +23,7 @@ var flutterTestRootCandidates = []string{
 	"test",
 }
 
-// DetectFeatureRoot returns the existing feature root with the most feature folders.
+// DetectFeatureRoot returns the existing feature root with the strongest feature signal.
 // Returns an empty string (no error) if none is found.
 func DetectFeatureRoot(rootDir, projectType string) (string, error) {
 	var candidates []string
@@ -38,13 +38,15 @@ func DetectFeatureRoot(rootDir, projectType string) (string, error) {
 
 	best := ""
 	bestCount := -1
+	bestScore := -1
 	for _, c := range candidates {
 		full := filepath.Join(rootDir, c)
 		if info, err := os.Stat(full); err == nil && info.IsDir() {
-			count := countFeatureFolders(full)
-			if best == "" || count > bestCount {
+			count, score := scoreFeatureRoot(full, c, projectType)
+			if best == "" || score > bestScore || (score == bestScore && count > bestCount) {
 				best = c
 				bestCount = count
+				bestScore = score
 			}
 		}
 	}
@@ -82,11 +84,17 @@ func DetectTestRoot(rootDir, projectType string) (string, error) {
 }
 
 func countFeatureFolders(featureRoot string) int {
+	count, _ := scoreFeatureRoot(featureRoot, "", "")
+	return count
+}
+
+func scoreFeatureRoot(featureRoot, candidate, projectType string) (int, int) {
 	entries, err := os.ReadDir(featureRoot)
 	if err != nil {
-		return 0
+		return 0, 0
 	}
 	count := 0
+	score := 0
 	for _, entry := range entries {
 		if !entry.IsDir() || excludedDirs[entry.Name()] {
 			continue
@@ -94,11 +102,65 @@ func countFeatureFolders(featureRoot string) int {
 		// Only count directories that look like features (have role files or
 		// internal sub-packages like handler/, service/, repository/).
 		// Using empty naming → bootstrap pattern detection.
-		if isFeatureUnit(filepath.Join(featureRoot, entry.Name()), models.NamingConvention{}) {
+		featurePath := filepath.Join(featureRoot, entry.Name())
+		if isFeatureUnit(featurePath, models.NamingConvention{}) {
 			count++
+			score += 10
+			if projectType == "go" {
+				score += scoreGoFeatureUnit(featurePath)
+			}
 		}
 	}
-	return count
+	if projectType == "go" {
+		score += scoreGoFeatureRootCandidate(candidate)
+	}
+	return count, score
+}
+
+func scoreGoFeatureRootCandidate(candidate string) int {
+	switch candidate {
+	case "internal":
+		return 5
+	case "cmd":
+		return -20
+	default:
+		return 0
+	}
+}
+
+func scoreGoFeatureUnit(featurePath string) int {
+	entries, err := os.ReadDir(featurePath)
+	if err != nil {
+		return 0
+	}
+	roleDirs := 0
+	for _, entry := range entries {
+		if entry.IsDir() && isGoFeatureRoleDir(entry.Name()) {
+			roleDirs++
+		}
+	}
+	switch {
+	case roleDirs >= 3:
+		return 80 + roleDirs*10
+	case roleDirs == 2:
+		return 50
+	case roleDirs == 1:
+		return 8
+	default:
+		return 0
+	}
+}
+
+func isGoFeatureRoleDir(name string) bool {
+	switch name {
+	case "handler", "handlers", "controller", "controllers",
+		"service", "services", "repository", "repositories",
+		"usecase", "usecases", "dto", "entity", "entities",
+		"errors", "domain", "data", "delivery":
+		return true
+	default:
+		return false
+	}
 }
 
 func detectFeatureRootPatternFallback(featureRoot string) string {

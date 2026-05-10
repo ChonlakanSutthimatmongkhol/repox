@@ -288,8 +288,7 @@ func (p *ProjectProfile) RenamePlan(like models.FeatureAnalysis, target TargetFe
 		IdentifierTargets: map[string]string{},
 	}
 	for role, source := range files {
-		ext := filepath.Ext(source)
-		targetPath := filepath.ToSlash(p.FeatureFilePath(target, role, ext))
+		targetPath := rewriteLikeSourceFilePath(source, plan)
 		plan.FileTargets[role] = targetPath
 		sourceBase := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
 		targetBase := strings.TrimSuffix(filepath.Base(targetPath), filepath.Ext(targetPath))
@@ -304,6 +303,33 @@ func (p *ProjectProfile) RenamePlan(like models.FeatureAnalysis, target TargetFe
 		}
 	}
 	return plan
+}
+
+func rewriteLikeSourceFilePath(source string, plan FeatureRenamePlan) string {
+	target := filepath.ToSlash(source)
+	replacements := []struct {
+		from string
+		to   string
+	}{
+		{plan.SourcePath, plan.TargetPath},
+		{plan.SourceSnake, plan.TargetSnake},
+		{plan.SourcePascal, plan.TargetPascal},
+		{plan.SourceCamel, plan.TargetCamel},
+	}
+	seen := map[string]bool{}
+	filtered := replacements[:0]
+	for _, replacement := range replacements {
+		if replacement.from == "" || replacement.from == replacement.to || seen[replacement.from] {
+			continue
+		}
+		seen[replacement.from] = true
+		filtered = append(filtered, replacement)
+	}
+	sort.Slice(filtered, func(i, j int) bool { return len(filtered[i].from) > len(filtered[j].from) })
+	for _, replacement := range filtered {
+		target = strings.ReplaceAll(target, replacement.from, replacement.to)
+	}
+	return filepath.ToSlash(target)
 }
 
 type FeatureRenamePlan struct {

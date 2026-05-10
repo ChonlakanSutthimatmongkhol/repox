@@ -131,7 +131,8 @@ var bootstrapInternalDirNames = []string{
 	"model", "models", "widget", "widgets", "delivery",
 	"handler", "handlers", "controller", "controllers",
 	"service", "services", "request", "requests",
-	"response", "responses", "enum", "enums", "firebase", "analytics",
+	"response", "responses", "dto", "entity", "entities",
+	"error", "errors", "enum", "enums", "firebase", "analytics",
 }
 
 // internalDirSet builds the set of directories that are role containers or
@@ -338,7 +339,7 @@ func collectFeatureFiles(rootDir, featureDir string, naming models.NamingConvent
 			if path != featureDir && (excludedDirs[d.Name()] || strings.HasPrefix(d.Name(), ".")) {
 				return filepath.SkipDir
 			}
-			if path != featureDir && !isFeatureInternalDir(d.Name(), naming) && isFeatureUnit(path, naming) {
+			if path != featureDir && !isFeatureInternalDir(d.Name(), naming) && !isUnderFeatureInternalDir(featureDir, path, naming) && isFeatureUnit(path, naming) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -387,6 +388,15 @@ func collectFeatureFiles(rootDir, featureDir string, naming models.NamingConvent
 	return files, routes
 }
 
+func isUnderFeatureInternalDir(featureDir, path string, naming models.NamingConvention) bool {
+	rel, err := filepath.Rel(featureDir, path)
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	return len(parts) > 1 && isFeatureInternalDir(parts[0], naming)
+}
+
 func isGeneratedSourceFile(path string) bool {
 	base := filepath.Base(path)
 	return strings.HasSuffix(base, ".g.dart") ||
@@ -410,9 +420,24 @@ func roleForFeaturePath(featureDir, path string, naming models.NamingConvention)
 	}
 	role := strings.Trim(base, "_")
 	if role == "" || role == featureName {
+		if routeRole := roleForInternalRoute(featureDir, path, naming); routeRole != "" {
+			return routeRole
+		}
 		return ""
 	}
 	return role
+}
+
+func roleForInternalRoute(featureDir, path string, naming models.NamingConvention) string {
+	rel, err := filepath.Rel(featureDir, filepath.Dir(path))
+	if err != nil || rel == "." {
+		return ""
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if len(parts) == 0 || !isFeatureInternalDir(parts[0], naming) {
+		return ""
+	}
+	return strings.TrimSuffix(parts[0], "s")
 }
 
 func uniqueFeatureRole(role, route string, files map[string]string) string {

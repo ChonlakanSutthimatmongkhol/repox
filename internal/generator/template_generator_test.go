@@ -466,11 +466,11 @@ func TestGenerateWithOptions_LikeRenameUsesScannedRoleFileTargets(t *testing.T) 
 		byPath[f.Path] = f.Content
 	}
 
-	require.Contains(t, byPath, "internal/new_feature/repository/new_feature_repository.go")
-	require.Contains(t, byPath, "internal/new_feature/repository/new_feature_plan_inputs.go")
-	assert.Contains(t, byPath["internal/new_feature/repository/new_feature_repository.go"], "type NewFeatureRepository struct{}")
-	assert.Contains(t, byPath["internal/new_feature/repository/new_feature_repository.go"], "type RetirementAge int")
-	assert.Contains(t, byPath["internal/new_feature/repository/new_feature_plan_inputs.go"], "type NewFeaturePlanInputs struct{}")
+	require.Contains(t, byPath, "internal/new_feature/repository/retirement.go")
+	require.Contains(t, byPath, "internal/new_feature/repository/retirement_plan_inputs.go")
+	assert.Contains(t, byPath["internal/new_feature/repository/retirement.go"], "type Retirement struct{}")
+	assert.Contains(t, byPath["internal/new_feature/repository/retirement.go"], "type RetirementAge int")
+	assert.Contains(t, byPath["internal/new_feature/repository/retirement_plan_inputs.go"], "type RetirementPlanInputs struct{}")
 }
 
 func TestGenerateWithOptions_LikeFeatureUsesTemplateNotSource(t *testing.T) {

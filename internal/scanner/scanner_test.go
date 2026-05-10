@@ -77,6 +77,37 @@ func TestDetectFeatureRoot_NotFound(t *testing.T) {
 	assert.Equal(t, "", got)
 }
 
+func TestDetectFeatureRoot_GoPrefersBusinessFeatureAnatomy(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/app\n"), 0o644))
+
+	writeFile(t, filepath.Join(dir, "internal/customer/handler/handler.go"), "package handler\n")
+	writeFile(t, filepath.Join(dir, "internal/customer/service/service.go"), "package service\n")
+	writeFile(t, filepath.Join(dir, "internal/customer/repository/repository.go"), "package repository\n")
+	writeFile(t, filepath.Join(dir, "internal/customer/dto/request.go"), "package dto\n")
+	writeFile(t, filepath.Join(dir, "internal/customer/entity/customer.go"), "package entity\n")
+	writeFile(t, filepath.Join(dir, "internal/customer/repository/customer_repository/option.go"), "package customer_repository\n")
+	writeFile(t, filepath.Join(dir, "internal/plans/handler/handler.go"), "package handler\n")
+	writeFile(t, filepath.Join(dir, "internal/plans/service/service.go"), "package service\n")
+
+	for _, pkg := range []string{"cache", "contexts", "converter", "database", "helper", "validator"} {
+		writeFile(t, filepath.Join(dir, "pkg", pkg, pkg+".go"), "package "+pkg+"\n")
+	}
+
+	got, err := DetectFeatureRoot(dir, "go")
+	require.NoError(t, err)
+	assert.Equal(t, "internal", got)
+
+	conv, err := (&GoScanner{}).Scan(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "internal", conv.FeatureRoot)
+	customer, ok := featureByName(conv.FeaturesAnalysis.Features, "customer")
+	require.True(t, ok)
+	assert.Contains(t, customer.Files, "request")
+	assert.Contains(t, customer.Files, "entity")
+	assert.Contains(t, customer.Files, "option")
+}
+
 func TestDetectFeatureStructure_CleanArchitecture(t *testing.T) {
 	dir := t.TempDir()
 	for _, sub := range []string{"home/presentation", "home/domain", "home/data"} {
@@ -119,6 +150,15 @@ func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}
+
+func featureByName(features []models.FeatureAnalysis, name string) (models.FeatureAnalysis, bool) {
+	for _, feature := range features {
+		if feature.Name == name {
+			return feature, true
+		}
+	}
+	return models.FeatureAnalysis{}, false
 }
 
 func TestDetectNamingConventions_Screen(t *testing.T) {
