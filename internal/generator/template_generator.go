@@ -40,12 +40,10 @@ type TemplateContext struct {
 	UsecaseSuffix    string
 	HandlerSuffix    string // Go
 	ServiceSuffix    string // Go
-	CommonImports    []string
-	BlocImport       string
-	UsecaseImport    string
-	RepositoryImport string
-	RequestImport    string
-	ResponseImport   string
+	CommonImports []string
+	// Imports holds relative dart import paths keyed by role name (e.g. "bloc", "usecase").
+	// Populated dynamically from the active roles being generated — no hardcoded role names.
+	Imports map[string]string
 	BlocBaseClass     string   // e.g. "BaseBlocScreen" when derived from like anatomy
 	BlocBaseImports   []string // imports required by BlocBaseClass
 	BlocAbstractStubs []string // "@override Sig => throw UnimplementedError();" stubs
@@ -767,14 +765,12 @@ func isIdentChar(r rune) bool {
 }
 
 func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Convention, activeRoles map[string]bool) TemplateContext {
-	ctx.BlocImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "bloc"))
-	ctx.RepositoryImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "repository"))
-	ctx.RequestImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "request"))
-	ctx.ResponseImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "response"))
-	// Only set UsecaseImport when a usecase file is actually being generated.
-	// This lets the bloc template conditionally inject the dependency.
-	if activeRoles["usecase"] {
-		ctx.UsecaseImport = relativeDartImport(outPath, featureFilePath(conv, ctx, "usecase"))
+	ctx.Imports = map[string]string{}
+	for role := range activeRoles {
+		path := relativeDartImport(outPath, featureFilePath(conv, ctx, role))
+		if path != "" {
+			ctx.Imports[role] = path
+		}
 	}
 	return ctx
 }

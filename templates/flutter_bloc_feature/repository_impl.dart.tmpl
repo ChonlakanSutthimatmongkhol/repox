@@ -1,6 +1,6 @@
-import '{{.RepositoryImport}}';
-import '{{.RequestImport}}';
-import '{{.ResponseImport}}';
+import '{{index .Imports "repository"}}';
+import '{{index .Imports "request"}}';
+import '{{index .Imports "response"}}';
 
 class {{.PascalName}}{{.RepositorySuffix}}Impl implements {{.PascalName}}{{.RepositorySuffix}} {
   const {{.PascalName}}{{.RepositorySuffix}}Impl();

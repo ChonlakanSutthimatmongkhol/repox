@@ -2,19 +2,19 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 {{- range .BlocBaseImports}}
 import '{{.}}';
 {{- end}}
-{{- if .UsecaseImport}}
-import '{{.UsecaseImport}}';
+{{- with index .Imports "usecase"}}
+import '{{.}}';
 {{- end}}
 
 part '{{.SnakeName}}_event.dart';
 part '{{.SnakeName}}_state.dart';
 
 class {{.PascalName}}{{.BlocSuffix}} extends {{if .BlocBaseClass}}{{.BlocBaseClass}}<{{.PascalName}}{{.EventSuffix}}, {{.PascalName}}{{.StateSuffix}}>{{else}}Bloc<{{.PascalName}}{{.EventSuffix}}, {{.PascalName}}{{.StateSuffix}}>{{end}} {
-  {{.PascalName}}{{.BlocSuffix}}({{if .UsecaseImport}}this._{{.CamelName}}{{.UsecaseSuffix}}{{end}}) : super(const {{.PascalName}}Initial()) {
+  {{.PascalName}}{{.BlocSuffix}}({{with index .Imports "usecase"}}this._{{$.CamelName}}{{$.UsecaseSuffix}}{{end}}) : super(const {{.PascalName}}Initial()) {
     on<{{.PascalName}}Started>(_onStarted);
   }
-{{if .UsecaseImport}}
-  final {{.PascalName}}{{.UsecaseSuffix}} _{{.CamelName}}{{.UsecaseSuffix}};
+{{with index .Imports "usecase"}}
+  final {{$.PascalName}}{{$.UsecaseSuffix}} _{{$.CamelName}}{{$.UsecaseSuffix}};
 {{end}}
   Future<void> _onStarted(
     {{.PascalName}}Started event,

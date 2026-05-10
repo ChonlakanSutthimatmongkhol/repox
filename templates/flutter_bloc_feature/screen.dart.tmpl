@@ -4,7 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '{{.}}';
 {{- end}}
 
-import '{{.BlocImport}}';
+{{- with index .Imports "bloc"}}import '{{.}}';{{end}}
 
 class {{.PascalName}}{{.ScreenSuffix}} extends {{if .ScreenBaseClass}}{{.ScreenBaseClass}}{{else}}StatefulWidget{{end}} {
   const {{.PascalName}}{{.ScreenSuffix}}({super.key});
