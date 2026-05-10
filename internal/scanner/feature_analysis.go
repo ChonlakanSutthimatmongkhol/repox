@@ -384,56 +384,25 @@ func uniqueFeatureRole(role, route string, files map[string]string) string {
 	}
 }
 
-// roleForFeatureFile maps a filename to a repox role using scanned naming conventions.
-// When naming has been detected (non-zero), only scanned suffixes are used.
-// When naming is zero (bootstrap phase, before naming is detected), it falls back
-// to the same candidate patterns used by the naming scanner for discovery.
+// roleForFeatureFile maps a filename to a repox role.
+// Uses naming.SuffixRoles (built by the scanner from detected suffixes) when available.
+// Falls back to bootstrap patterns only during the initial scan pass before naming is detected.
 func roleForFeatureFile(filename string, naming models.NamingConvention) string {
 	ext := filepath.Ext(filename)
 	if ext != ".dart" && ext != ".go" {
 		return ""
 	}
-	base := strings.TrimSuffix(filename, ext)
-	check := func(suffix, role string) string {
-		if suffix == "" {
-			return ""
-		}
-		if strings.HasSuffix(base, "_"+strings.ToLower(suffix)) {
-			return role
-		}
-		return ""
-	}
+	base := strings.ToLower(strings.TrimSuffix(filename, ext))
 
-	if naming != (models.NamingConvention{}) {
-		// Naming detected — use only what the scanner found, no guessing.
-		if r := check(naming.RepositorySuffix+"Impl", "repository_impl"); r != "" {
-			return r
+	if len(naming.SuffixRoles) > 0 {
+		// Lookup from scan-built map — longest suffix wins to handle "repositoryimpl" before "repository".
+		bestRole, bestLen := "", 0
+		for suffix, role := range naming.SuffixRoles {
+			if len(suffix) > bestLen && strings.HasSuffix(base, "_"+suffix) {
+				bestRole, bestLen = role, len(suffix)
+			}
 		}
-		if r := check(naming.ScreenSuffix, "screen"); r != "" {
-			return r
-		}
-		if r := check(naming.BlocSuffix, "bloc"); r != "" {
-			return r
-		}
-		if r := check(naming.EventSuffix, "event"); r != "" {
-			return r
-		}
-		if r := check(naming.StateSuffix, "state"); r != "" {
-			return r
-		}
-		if r := check(naming.RepositorySuffix, "repository"); r != "" {
-			return r
-		}
-		if r := check(naming.UsecaseSuffix, "usecase"); r != "" {
-			return r
-		}
-		if r := check(naming.HandlerSuffix, "handler"); r != "" {
-			return r
-		}
-		if r := check(naming.ServiceSuffix, "service"); r != "" {
-			return r
-		}
-		return ""
+		return bestRole
 	}
 
 	// Bootstrap fallback — same candidates the naming scanner votes on.

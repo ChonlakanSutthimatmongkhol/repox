@@ -28,6 +28,10 @@ type NamingConvention struct {
 	UsecaseSuffix    string `json:"usecase_suffix,omitempty"`
 	HandlerSuffix    string `json:"handler_suffix,omitempty"`
 	ServiceSuffix    string `json:"service_suffix,omitempty"`
+	// SuffixRoles maps lowercase file suffixes (e.g. "screen", "bloc") to repox
+	// role names (e.g. "screen", "bloc"). Built by the scanner from detected suffixes
+	// so generators need no hardcoded suffix→role mapping.
+	SuffixRoles      map[string]string `json:"suffix_roles,omitempty"`
 }
 
 // RoutingConfig holds routing configuration.

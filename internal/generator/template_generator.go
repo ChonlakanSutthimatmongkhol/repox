@@ -346,45 +346,24 @@ func roleForLikePath(featureName, path string, naming models.NamingConvention) s
 	return strings.Trim(base, "_")
 }
 
-// knownTemplateRole maps a filename to a role using naming conventions from scan.
-// All suffix patterns come from conv.Naming — no hardcoding.
+// knownTemplateRole maps a filename to a role using the SuffixRoles map from scan.
+// No hardcoded suffix→role list — the scanner builds and stores this in conventions.json.
 func knownTemplateRole(filename string, naming models.NamingConvention) string {
-	base := strings.TrimSuffix(filename, filepath.Ext(filename))
-	check := func(suffix, role string) string {
-		if suffix == "" {
-			return ""
-		}
-		if strings.HasSuffix(base, "_"+strings.ToLower(suffix)) {
-			return role
-		}
+	if len(naming.SuffixRoles) == 0 {
 		return ""
 	}
-	if r := check(naming.RepositorySuffix+"Impl", "repository_impl"); r != "" {
-		return r
+	base := strings.ToLower(strings.TrimSuffix(filename, filepath.Ext(filename)))
+	// Check longer suffixes first to prefer "repositoryimpl" over "repository".
+	type entry struct{ suffix, role string }
+	entries := make([]entry, 0, len(naming.SuffixRoles))
+	for suffix, role := range naming.SuffixRoles {
+		entries = append(entries, entry{suffix, role})
 	}
-	if r := check(naming.ScreenSuffix, "screen"); r != "" {
-		return r
-	}
-	if r := check(naming.BlocSuffix, "bloc"); r != "" {
-		return r
-	}
-	if r := check(naming.EventSuffix, "event"); r != "" {
-		return r
-	}
-	if r := check(naming.StateSuffix, "state"); r != "" {
-		return r
-	}
-	if r := check(naming.RepositorySuffix, "repository"); r != "" {
-		return r
-	}
-	if r := check(naming.UsecaseSuffix, "usecase"); r != "" {
-		return r
-	}
-	if r := check(naming.HandlerSuffix, "handler"); r != "" {
-		return r
-	}
-	if r := check(naming.ServiceSuffix, "service"); r != "" {
-		return r
+	sort.Slice(entries, func(i, j int) bool { return len(entries[i].suffix) > len(entries[j].suffix) })
+	for _, e := range entries {
+		if strings.HasSuffix(base, "_"+e.suffix) {
+			return e.role
+		}
 	}
 	return ""
 }

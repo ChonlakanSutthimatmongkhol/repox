@@ -70,6 +70,7 @@ func detectFlutterNaming(featureRoot string, conv models.NamingConvention) (mode
 	conv.UsecaseSuffix = majorityVote(usecaseVotes, "UseCase")
 	conv.EventSuffix = majorityVote(eventVotes, "Event")
 	conv.StateSuffix = majorityVote(stateVotes, "State")
+	conv.SuffixRoles = buildSuffixRoles(conv)
 	return conv, nil
 }
 
@@ -106,7 +107,33 @@ func detectGoNaming(featureRoot string, conv models.NamingConvention) (models.Na
 	conv.HandlerSuffix = majorityVote(handlerVotes, "Handler")
 	conv.ServiceSuffix = majorityVote(serviceVotes, "Service")
 	conv.RepositorySuffix = majorityVote(repoVotes, "Repository")
+	conv.SuffixRoles = buildSuffixRoles(conv)
 	return conv, nil
+}
+
+// buildSuffixRoles converts detected naming suffixes into a lowercase suffix→role
+// lookup map stored in conventions.json. Generators use this map directly so they
+// need no hardcoded suffix→role lists of their own.
+func buildSuffixRoles(conv models.NamingConvention) map[string]string {
+	m := map[string]string{}
+	add := func(suffix, role string) {
+		if s := strings.ToLower(suffix); s != "" {
+			m[s] = role
+			// Also register the "Impl" variant for repository
+			if role == "repository" {
+				m[s+"impl"] = "repository_impl"
+			}
+		}
+	}
+	add(conv.ScreenSuffix, "screen")
+	add(conv.BlocSuffix, "bloc")
+	add(conv.EventSuffix, "event")
+	add(conv.StateSuffix, "state")
+	add(conv.RepositorySuffix, "repository")
+	add(conv.UsecaseSuffix, "usecase")
+	add(conv.HandlerSuffix, "handler")
+	add(conv.ServiceSuffix, "service")
+	return m
 }
 
 // majorityVote returns the key with the highest count, or defaultVal if all are zero.
