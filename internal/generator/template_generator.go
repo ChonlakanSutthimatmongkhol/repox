@@ -113,11 +113,24 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 
 	allowedRoles := roleSet(opts.Roles)
 
+	// For Go projects with --like, let copy-rename take precedence over templates for
+	// roles the like feature already has. This preserves the project's file-naming
+	// convention (e.g. "repository.go" instead of the template's "payment_repository.go").
+	likeRolesHandledByCopy := map[string]bool{}
+	if opts.LikeFeature != nil && opts.BaseDir != "" && conv.ProjectType == "go" {
+		for role := range likeFeatureFiles(*opts.LikeFeature, opts.BaseDir, conv.Naming) {
+			likeRolesHandledByCopy[role] = true
+		}
+	}
+
 	// Pre-compute which roles will be rendered so templates can conditionally
 	// inject dependencies (e.g. usecase) only when those roles are actually generated.
 	activeRoles := map[string]bool{}
 	for _, entry := range entries {
 		kind := templateKind(entry)
+		if likeRolesHandledByCopy[kind] {
+			continue
+		}
 		if len(allowedRoles) == 0 || allowedRoles[kind] {
 			activeRoles[kind] = true
 		}
@@ -128,6 +141,10 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 	for _, entry := range entries {
 		kind := templateKind(entry)
 		if len(allowedRoles) > 0 && !allowedRoles[kind] {
+			continue
+		}
+		// Defer to copy-rename for roles the like feature already provides.
+		if likeRolesHandledByCopy[kind] {
 			continue
 		}
 		outPath := outputPath(entry, ctx, conv)
