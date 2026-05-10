@@ -117,9 +117,55 @@ func mostCommonRoute(counts map[string]int) string {
 	return bestRoute
 }
 
-// DetectFeaturePattern checks one feature directory recursively and classifies
-// it as flat, grouped, or clean_architecture.
-func DetectFeaturePattern(featurePath string) string {
+// cleanArchLayers are the universal DDD/Clean-Architecture layer names.
+// They are architectural conventions shared across all projects, not team-specific.
+var cleanArchLayers = map[string]bool{
+	"presentation": true, "domain": true, "data": true,
+	"infrastructure": true, "application": true,
+}
+
+// bootstrapInternalDirNames is the fallback used before naming conventions are scanned.
+var bootstrapInternalDirNames = []string{
+	"bloc", "cubit", "screen", "screens", "page", "pages",
+	"repository", "repositories", "usecase", "usecases",
+	"model", "models", "widget", "widgets", "delivery",
+	"handler", "handlers", "controller", "controllers",
+	"service", "services", "request", "requests",
+	"response", "responses", "enum", "enums", "firebase", "analytics",
+}
+
+// internalDirSet builds the set of directories that are role containers or
+// architecture layers rather than nested feature roots. When naming.SuffixRoles
+// is populated (post-scan), only role-derived names are used; otherwise the
+// bootstrap list is used.
+func internalDirSet(naming models.NamingConvention) map[string]bool {
+	set := map[string]bool{}
+	for layer := range cleanArchLayers {
+		set[layer] = true
+	}
+	if len(naming.SuffixRoles) > 0 {
+		for _, role := range naming.SuffixRoles {
+			set[role] = true
+			set[role+"s"] = true // common plural form
+		}
+		return set
+	}
+	for _, name := range bootstrapInternalDirNames {
+		set[name] = true
+	}
+	return set
+}
+
+// DetectFeaturePattern checks one feature directory and classifies it as
+// flat, grouped, or clean_architecture.
+// Pass naming so that role-dir detection is driven by scanned conventions
+// rather than hardcoded strings.
+func DetectFeaturePattern(featurePath string, naming ...models.NamingConvention) string {
+	n := models.NamingConvention{}
+	if len(naming) > 0 {
+		n = naming[0]
+	}
+
 	entries, err := os.ReadDir(featurePath)
 	if err != nil {
 		return "flat"
@@ -140,14 +186,11 @@ func DetectFeaturePattern(featurePath string) string {
 	if dirs["presentation"] && (dirs["domain"] || dirs["data"]) {
 		return "clean_architecture"
 	}
-	if dirs["presentation"] || dirs["bloc"] || dirs["screen"] || dirs["screens"] ||
-		dirs["repository"] || dirs["repositories"] ||
-		dirs["handler"] || dirs["handlers"] ||
-		dirs["controller"] || dirs["controllers"] ||
-		dirs["service"] || dirs["services"] ||
-		dirs["usecase"] || dirs["usecases"] ||
-		dirs["delivery"] {
-		return "grouped"
+	groupedSet := internalDirSet(n)
+	for dir := range dirs {
+		if groupedSet[dir] {
+			return "grouped"
+		}
 	}
 	return "flat"
 }
@@ -168,7 +211,7 @@ func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string, namin
 		if path == featureRootPath {
 			return nil
 		}
-		if isFeatureInternalDir(name) {
+		if isFeatureInternalDir(name, naming) {
 			return filepath.SkipDir
 		}
 		if !isFeatureUnit(path, naming) {
@@ -196,7 +239,7 @@ func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string, namin
 			Path:         relPath,
 			Parent:       parent,
 			Depth:        featureDepth(relUnderRoot),
-			Structure:    DetectFeaturePattern(path),
+			Structure:    DetectFeaturePattern(path, naming),
 			LastModified: lastModified.UTC().Format(time.RFC3339),
 			FileCount:    len(files),
 			Files:        files,
@@ -216,10 +259,10 @@ func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string, namin
 }
 
 func isFeatureUnit(path string, naming models.NamingConvention) bool {
-	if isFeatureInternalDir(filepath.Base(path)) {
+	if isFeatureInternalDir(filepath.Base(path), naming) {
 		return false
 	}
-	if DetectFeaturePattern(path) != "flat" {
+	if DetectFeaturePattern(path, naming) != "flat" {
 		return true
 	}
 	if hasFeatureRoleFilesUnderInternalDirs(path, naming) {
@@ -250,7 +293,7 @@ func hasFeatureRoleFilesUnderInternalDirs(path string, naming models.NamingConve
 		return false
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || !isFeatureInternalDir(entry.Name()) {
+		if !entry.IsDir() || !isFeatureInternalDir(entry.Name(), naming) {
 			continue
 		}
 		found := false
@@ -295,7 +338,7 @@ func collectFeatureFiles(rootDir, featureDir string, naming models.NamingConvent
 			if path != featureDir && (excludedDirs[d.Name()] || strings.HasPrefix(d.Name(), ".")) {
 				return filepath.SkipDir
 			}
-			if path != featureDir && !isFeatureInternalDir(d.Name()) && isFeatureUnit(path, naming) {
+			if path != featureDir && !isFeatureInternalDir(d.Name(), naming) && isFeatureUnit(path, naming) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -448,17 +491,12 @@ func featureDepth(relUnderRoot string) int {
 	return len(strings.Split(filepath.ToSlash(relUnderRoot), "/"))
 }
 
-func isFeatureInternalDir(name string) bool {
-	switch name {
-	case "presentation", "domain", "data", "bloc", "cubit", "screen", "screens",
-		"page", "pages", "repository", "repositories", "usecase", "usecases",
-		"model", "models", "widget", "widgets", "delivery", "handler", "handlers",
-		"controller", "controllers", "service", "services", "request", "requests",
-		"response", "responses", "enum", "enums", "firebase", "analytics":
-		return true
-	default:
-		return false
+func isFeatureInternalDir(name string, naming ...models.NamingConvention) bool {
+	n := models.NamingConvention{}
+	if len(naming) > 0 {
+		n = naming[0]
 	}
+	return internalDirSet(n)[name]
 }
 
 func emptyPatternDistribution() map[string]models.PatternDistribution {
