@@ -6,8 +6,8 @@ import '{{.}}';
 import '{{.}}';
 {{- end}}
 
-part '{{.SnakeName}}_event.dart';
-part '{{.SnakeName}}_state.dart';
+part '{{index .FileNames "event"}}';
+part '{{index .FileNames "state"}}';
 
 class {{.PascalName}}{{index .Suffixes "bloc"}} extends {{if .BlocBaseClass}}{{.BlocBaseClass}}<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{else}}Bloc<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{end}} {
   {{.PascalName}}{{index .Suffixes "bloc"}}({{with index .Imports "usecase"}}this._{{$.CamelName}}{{index $.Suffixes "usecase"}}{{end}}) : super(const {{.PascalName}}Initial()) {

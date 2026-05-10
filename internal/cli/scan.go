@@ -313,5 +313,6 @@ func applyFeatureRootOverride(conv *models.Convention, rootDir, featureRoot stri
 	}
 
 	conv.FeaturesAnalysis.Features = merged
+	conv.Roles = scanner.InferRoleConventions(conv.FeaturesAnalysis.Features, conv.Naming)
 	return nil
 }

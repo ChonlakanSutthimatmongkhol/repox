@@ -135,13 +135,16 @@ var bootstrapInternalDirNames = []string{
 }
 
 // internalDirSet builds the set of directories that are role containers or
-// architecture layers rather than nested feature roots. When naming.SuffixRoles
-// is populated (post-scan), only role-derived names are used; otherwise the
-// bootstrap list is used.
+// architecture layers rather than nested feature roots. Bootstrap role folders
+// keep generic model/request/response layouts discoverable; scanned suffix roles
+// add project-specific role folders on top.
 func internalDirSet(naming models.NamingConvention) map[string]bool {
 	set := map[string]bool{}
 	for layer := range cleanArchLayers {
 		set[layer] = true
+	}
+	for _, name := range bootstrapInternalDirNames {
+		set[name] = true
 	}
 	if len(naming.SuffixRoles) > 0 {
 		for _, role := range naming.SuffixRoles {
@@ -149,9 +152,6 @@ func internalDirSet(naming models.NamingConvention) map[string]bool {
 			set[role+"s"] = true // common plural form
 		}
 		return set
-	}
-	for _, name := range bootstrapInternalDirNames {
-		set[name] = true
 	}
 	return set
 }
@@ -434,8 +434,8 @@ func uniqueFeatureRole(role, route string, files map[string]string) string {
 }
 
 // roleForFeatureFile maps a filename to a repox role.
-// Uses naming.SuffixRoles (built by the scanner from detected suffixes) when available.
-// Falls back to bootstrap patterns only during the initial scan pass before naming is detected.
+// Uses naming.SuffixRoles (built by the scanner from detected suffixes) first.
+// Falls back to bootstrap patterns for generic roles that are not suffix-voted.
 func roleForFeatureFile(filename string, naming models.NamingConvention) string {
 	ext := filepath.Ext(filename)
 	if ext != ".dart" && ext != ".go" {
@@ -451,11 +451,13 @@ func roleForFeatureFile(filename string, naming models.NamingConvention) string 
 				bestRole, bestLen = role, len(suffix)
 			}
 		}
-		return bestRole
+		if bestRole != "" {
+			return bestRole
+		}
 	}
 
-	// Bootstrap fallback — same candidates the naming scanner votes on.
-	// Used only during the initial scan pass before naming is available.
+	// Bootstrap fallback — same candidates the naming scanner votes on, plus
+	// generic model/request/response roles needed to discover scanned metadata.
 	switch {
 	case strings.HasSuffix(base, "_repository_impl"):
 		return "repository_impl"

@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -164,6 +166,31 @@ func TestGenerate_UsesScannedNestedFeatureRoutes(t *testing.T) {
 	assert.Contains(t, byPath[repoImplPath], "import '../../domain/repositories/fund_list_repository.dart';")
 }
 
+func TestGenerate_UsesRoleConventionsForNamesAndImports(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "grouped"
+	conv.Roles["bloc"] = models.RoleConvention{FileSuffix: "controller", ClassSuffix: "Controller"}
+	conv.Roles["event"] = models.RoleConvention{FileSuffix: "signal", ClassSuffix: "Signal"}
+	conv.Roles["state"] = models.RoleConvention{FileSuffix: "snapshot", ClassSuffix: "Snapshot"}
+
+	files, err := gen.GenerateWithOptions("fund_list", "flutter_bloc_feature", &conv, GenerateOptions{
+		Roles: []string{"bloc", "event", "state"},
+	})
+	require.NoError(t, err)
+
+	byPath := make(map[string]string, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f.Content
+	}
+
+	blocPath := "lib/features/fund_list/bloc/fund_list_controller.dart"
+	require.Contains(t, byPath, blocPath)
+	assert.Contains(t, byPath[blocPath], "part 'fund_list_signal.dart';")
+	assert.Contains(t, byPath[blocPath], "part 'fund_list_snapshot.dart';")
+	assert.Contains(t, byPath[blocPath], "class FundListController extends Bloc<FundListSignal, FundListSnapshot>")
+}
+
 func TestGenerateWithOptions_FiltersRoles(t *testing.T) {
 	gen := NewTemplateGenerator()
 	conv := config.DefaultConventions()
@@ -186,6 +213,68 @@ func TestGenerateWithOptions_FiltersRoles(t *testing.T) {
 		assert.NotContains(t, path, "repository")
 		assert.NotContains(t, path, "test")
 	}
+}
+
+func TestGenerateWithOptions_LikeRenameUsesScannedRoleFileTargets(t *testing.T) {
+	gen := NewTemplateGenerator()
+	baseDir := t.TempDir()
+	writeFile := func(path, content string) {
+		t.Helper()
+		full := filepath.Join(baseDir, path)
+		require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))
+		require.NoError(t, os.WriteFile(full, []byte(content), 0o644))
+	}
+	writeFile("internal/payment/repository/retirement.go", "package payment\n\ntype RetirementRepository struct{}\ntype RetirementAge int\n")
+	writeFile("internal/payment/repository/retirement_plan_inputs.go", "package payment\n\ntype RetirementPlanInputs struct{}\n")
+
+	conv := config.DefaultConventions()
+	conv.ProjectType = "go"
+	conv.FeatureRoot = "internal"
+	conv.TestRoot = "internal"
+	conv.FeatureStructure = "clean_architecture"
+	conv.Roles = map[string]models.RoleConvention{
+		"repository": {FileSuffix: "repository", ClassSuffix: "Repository"},
+		"inputs":     {FileSuffix: "plan_inputs", ClassSuffix: "PlanInputs"},
+	}
+	conv.PatternMappings = models.PatternMappings{
+		"clean_architecture": {FileRoutes: map[string]string{
+			"repository": "repository",
+			"inputs":     "repository",
+		}},
+	}
+	like := models.FeatureAnalysis{
+		Name:      "payment",
+		Path:      "internal/payment",
+		Structure: "clean_architecture",
+		Files: map[string]string{
+			"repository": "internal/payment/repository/retirement.go",
+			"inputs":     "internal/payment/repository/retirement_plan_inputs.go",
+		},
+		FileRoutes: map[string]string{
+			"repository": "repository",
+			"inputs":     "repository",
+		},
+	}
+	conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{like}
+
+	files, err := gen.GenerateWithOptions("new_feature", "go_clean_feature", &conv, GenerateOptions{
+		Roles:         []string{"repository", "inputs"},
+		RolesExplicit: true,
+		LikeFeature:   &like,
+		BaseDir:       baseDir,
+	})
+	require.NoError(t, err)
+
+	byPath := make(map[string]string, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f.Content
+	}
+
+	require.Contains(t, byPath, "internal/new_feature/repository/new_feature_repository.go")
+	require.Contains(t, byPath, "internal/new_feature/repository/new_feature_plan_inputs.go")
+	assert.Contains(t, byPath["internal/new_feature/repository/new_feature_repository.go"], "type NewFeatureRepository struct{}")
+	assert.Contains(t, byPath["internal/new_feature/repository/new_feature_repository.go"], "type RetirementAge int")
+	assert.Contains(t, byPath["internal/new_feature/repository/new_feature_plan_inputs.go"], "type NewFeaturePlanInputs struct{}")
 }
 
 func TestGenerateWithOptions_LikeFeatureUsesTemplateNotSource(t *testing.T) {

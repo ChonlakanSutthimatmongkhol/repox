@@ -23,8 +23,39 @@ func setupInitDir(t *testing.T) string {
 	return dir
 }
 
-func TestGenerateFeature_CreatesFiles(t *testing.T) {
+func setupScannedDir(t *testing.T) string {
+	t.Helper()
 	dir := setupInitDir(t)
+	markConventionsScanned(t)
+	return dir
+}
+
+func markConventionsScanned(t *testing.T) {
+	t.Helper()
+	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
+	require.NoError(t, err)
+	if len(conv.Roles) == 0 {
+		conv.Roles = config.DefaultConventions().Roles
+	}
+	if len(conv.FeaturesAnalysis.Features) == 0 {
+		conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{
+			{
+				Name: "existing",
+				Path: "lib/features/existing",
+				Files: map[string]string{
+					"bloc":   "lib/features/existing/existing_bloc.dart",
+					"event":  "lib/features/existing/existing_event.dart",
+					"screen": "lib/features/existing/existing_screen.dart",
+					"state":  "lib/features/existing/existing_state.dart",
+				},
+			},
+		}
+	}
+	require.NoError(t, config.Save(config.RepoxPath("conventions.json"), conv))
+}
+
+func TestGenerateFeature_CreatesFiles(t *testing.T) {
+	dir := setupScannedDir(t)
 
 	generateForce = false
 	generateDryRun = false
@@ -48,7 +79,7 @@ func TestGenerateFeature_CreatesFiles(t *testing.T) {
 }
 
 func TestGenerateFeature_RefusesOverwrite(t *testing.T) {
-	setupInitDir(t)
+	setupScannedDir(t)
 
 	generateForce = false
 	generateDryRun = false
@@ -70,7 +101,7 @@ func TestGenerateFeature_RefusesOverwrite(t *testing.T) {
 }
 
 func TestGenerateFeature_ForceOverwrites(t *testing.T) {
-	setupInitDir(t)
+	setupScannedDir(t)
 
 	generateForce = false
 	generateDryRun = false
@@ -88,7 +119,7 @@ func TestGenerateFeature_ForceOverwrites(t *testing.T) {
 }
 
 func TestGenerateFeature_DryRun(t *testing.T) {
-	dir := setupInitDir(t)
+	dir := setupScannedDir(t)
 
 	generateForce = false
 	generateDryRun = true
@@ -109,8 +140,23 @@ func TestGenerateFeature_DryRun(t *testing.T) {
 	assert.Len(t, matches, 0, "dry-run should not write any files")
 }
 
-func TestGenerateFeature_RolesDryRun(t *testing.T) {
+func TestGenerateFeature_RequiresScanMetadata(t *testing.T) {
 	setupInitDir(t)
+
+	generateForce = false
+	generateDryRun = false
+	generateTemplate = ""
+	generatePattern = ""
+	generateRoles = ""
+	generateLike = ""
+
+	err := runGenerateFeature(generateFeatureCmd, []string{"watchlist"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "run `repox scan` before generating")
+}
+
+func TestGenerateFeature_RolesDryRun(t *testing.T) {
+	setupScannedDir(t)
 
 	generateForce = false
 	generateDryRun = true
@@ -252,7 +298,7 @@ func TestRolesForLikeFeature_IncludesCleanArchitectureLayers(t *testing.T) {
 }
 
 func TestGenerateFeature_UsesRecommendedPatternFromScan(t *testing.T) {
-	dir := setupInitDir(t)
+	dir := setupScannedDir(t)
 
 	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
 	require.NoError(t, err)
@@ -277,7 +323,7 @@ func TestGenerateFeature_UsesRecommendedPatternFromScan(t *testing.T) {
 }
 
 func TestGenerateFeature_PatternOverride(t *testing.T) {
-	dir := setupInitDir(t)
+	dir := setupScannedDir(t)
 
 	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
 	require.NoError(t, err)

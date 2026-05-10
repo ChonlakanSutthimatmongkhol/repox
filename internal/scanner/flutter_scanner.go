@@ -74,6 +74,7 @@ func (s *FlutterScanner) Scan(rootDir string) (*models.Convention, error) {
 	}
 	conv.Routing = routing
 	conv.PatternMappings = InferPatternMappings(conv.FeaturesAnalysis.Features, defaultPatternMappings())
+	conv.Roles = InferRoleConventions(conv.FeaturesAnalysis.Features, conv.Naming)
 
 	return conv, nil
 }

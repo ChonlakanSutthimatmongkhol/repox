@@ -78,6 +78,17 @@ func DefaultConventions() models.Convention {
 			"package:flutter_bloc/flutter_bloc.dart",
 		},
 		PatternMappings: DefaultPatternMappings(),
+		Roles: map[string]models.RoleConvention{
+			"bloc":            {FileSuffix: "bloc", ClassSuffix: "Bloc"},
+			"event":           {FileSuffix: "event", ClassSuffix: "Event"},
+			"repository":      {FileSuffix: "repository", ClassSuffix: "Repository"},
+			"repository_impl": {FileSuffix: "repository_impl", ClassSuffix: "RepositoryImpl"},
+			"request":         {FileSuffix: "request", ClassSuffix: "Request"},
+			"response":        {FileSuffix: "response", ClassSuffix: "Response"},
+			"screen":          {FileSuffix: "screen", ClassSuffix: "Screen"},
+			"state":           {FileSuffix: "state", ClassSuffix: "State"},
+			"usecase":         {FileSuffix: "usecase", ClassSuffix: "UseCase"},
+		},
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/conventions"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
 	repotmpl "github.com/ChonlakanSutthimatmongkhol/repox/templates"
 )
@@ -25,20 +26,21 @@ func toGoPackageName(featureName string) string {
 
 // TemplateContext holds values passed to every scaffold template.
 type TemplateContext struct {
-	FeatureName string
-	FeaturePath string
-	PascalName  string
-	CamelName   string
-	SnakeName   string
-	PackageName string // Go: lowercase no-separator package name
-	ModulePath  string // Go: module path from go.mod
+	FeatureName   string
+	FeaturePath   string
+	PascalName    string
+	CamelName     string
+	SnakeName     string
+	PackageName   string // Go: lowercase no-separator package name
+	ModulePath    string // Go: module path from go.mod
 	CommonImports []string
 	// Suffixes holds PascalCase class-name suffixes keyed by role name (e.g. "bloc" → "Bloc", "service" → "Service").
 	// Populated dynamically from the scanned SuffixRoles convention — no hardcoded role names.
 	Suffixes map[string]string
 	// Imports holds relative dart import paths keyed by role name (e.g. "bloc", "usecase").
 	// Populated dynamically from the active roles being generated — no hardcoded role names.
-	Imports map[string]string
+	Imports           map[string]string
+	FileNames         map[string]string
 	BlocBaseClass     string   // e.g. "BaseBlocScreen" when derived from like anatomy
 	BlocBaseImports   []string // imports required by BlocBaseClass
 	BlocAbstractStubs []string // "@override Sig => throw UnimplementedError();" stubs
@@ -93,9 +95,12 @@ func (g *TemplateGenerator) Generate(featureName, templateName string, conv *mod
 
 // GenerateWithOptions renders selected templates in templateName for the given feature and conventions.
 func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string, conv *models.Convention, opts GenerateOptions) ([]GeneratedFile, error) {
-	ctx := buildContext(featureName, conv)
+	profile := conventions.NewProjectProfile(conv)
+	ctx := buildContext(featureName, conv, profile)
 	ctx = ctx.withBaseClassesFrom(opts.LikeFeature)
 	conv = conventionWithLikeTarget(conv, ctx, opts)
+	profile = conventions.NewProjectProfile(conv)
+	target := targetFeatureFromContext(ctx)
 
 	pattern := filepath.Join(templateName, "*.tmpl")
 	entries, err := fs.Glob(g.fs, pattern)
@@ -113,7 +118,7 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 	// convention (e.g. "repository.go" instead of the template's "payment_repository.go").
 	likeRolesHandledByCopy := map[string]bool{}
 	if opts.LikeFeature != nil && opts.BaseDir != "" && conv.ProjectType == "go" {
-		for role := range likeFeatureFiles(*opts.LikeFeature, opts.BaseDir, conv.Naming) {
+		for role := range profile.FeatureFiles(*opts.LikeFeature, opts.BaseDir) {
 			likeRolesHandledByCopy[role] = true
 		}
 	}
@@ -142,8 +147,8 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 		if likeRolesHandledByCopy[kind] {
 			continue
 		}
-		outPath := outputPath(entry, ctx, conv)
-		fileCtx := ctx.withImportsFor(outPath, conv, activeRoles)
+		outPath := profile.OutputPath(entry, target)
+		fileCtx := ctx.withImportsFor(outPath, profile, activeRoles)
 		content, err := g.renderFile(entry, fileCtx)
 		if err != nil {
 			return nil, err
@@ -151,7 +156,7 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 		out = append(out, GeneratedFile{Path: outPath, Content: content})
 		generatedRoles[kind] = true
 	}
-	out = append(out, renderLikeAncillaryFiles(ctx, conv, opts, allowedRoles, generatedRoles)...)
+	out = append(out, renderLikeAncillaryFiles(ctx, profile, opts, allowedRoles, generatedRoles)...)
 	return out, nil
 }
 
@@ -176,11 +181,12 @@ func conventionWithLikeTarget(conv *models.Convention, ctx TemplateContext, opts
 	return &convCopy
 }
 
-func renderLikeAncillaryFiles(ctx TemplateContext, conv *models.Convention, opts GenerateOptions, allowedRoles map[string]bool, generatedRoles map[string]bool) []GeneratedFile {
+func renderLikeAncillaryFiles(ctx TemplateContext, profile *conventions.ProjectProfile, opts GenerateOptions, allowedRoles map[string]bool, generatedRoles map[string]bool) []GeneratedFile {
 	if opts.LikeFeature == nil || strings.TrimSpace(opts.BaseDir) == "" {
 		return nil
 	}
-	files := likeFeatureFiles(*opts.LikeFeature, opts.BaseDir, conv.Naming)
+	plan := profile.RenamePlan(*opts.LikeFeature, targetFeatureFromContext(ctx), opts.BaseDir)
+	files := plan.Files
 	roles := make([]string, 0, len(files))
 	for role := range files {
 		roles = append(roles, role)
@@ -195,8 +201,8 @@ func renderLikeAncillaryFiles(ctx TemplateContext, conv *models.Convention, opts
 		if opts.RolesExplicit && len(allowedRoles) > 0 && !allowedRoles[role] {
 			continue
 		}
-		outPath := rewriteLikeFeaturePath(files[role], ctx, conv, *opts.LikeFeature, opts.BaseDir)
-		content, ok := renderLikeSourcePath(files[role], ctx, conv, opts)
+		outPath := plan.RewritePath(files[role], opts.BaseDir)
+		content, ok := renderLikeSourcePath(files[role], plan, opts)
 		if !ok || outPath == "" {
 			continue
 		}
@@ -206,7 +212,7 @@ func renderLikeAncillaryFiles(ctx TemplateContext, conv *models.Convention, opts
 	return out
 }
 
-func renderLikeSourcePath(sourcePath string, ctx TemplateContext, conv *models.Convention, opts GenerateOptions) (string, bool) {
+func renderLikeSourcePath(sourcePath string, plan conventions.FeatureRenamePlan, opts GenerateOptions) (string, bool) {
 	if !filepath.IsAbs(sourcePath) {
 		sourcePath = filepath.Join(opts.BaseDir, sourcePath)
 	}
@@ -214,19 +220,25 @@ func renderLikeSourcePath(sourcePath string, ctx TemplateContext, conv *models.C
 	if err != nil {
 		return "", false
 	}
-	content := stripCrossFeatureImports(string(data), conv, *opts.LikeFeature)
-	return rewriteLikeFeatureText(content, ctx, conv, *opts.LikeFeature, opts.BaseDir), true
+	content := stripCrossFeatureImports(string(data), opts.LikeFeature)
+	return rewriteLikeFeatureText(content, plan, *opts.LikeFeature, opts.BaseDir), true
 }
 
 // stripCrossFeatureImports removes Dart import lines that reference other features
 // (not the source feature itself, common/, or core/ packages), preventing cross-feature
 // business logic from leaking into freshly scaffolded features.
-func stripCrossFeatureImports(content string, conv *models.Convention, like models.FeatureAnalysis) string {
-	featureRoot := strings.TrimPrefix(filepath.ToSlash(conv.FeatureRoot), "lib/")
-	if featureRoot == "" {
+func stripCrossFeatureImports(content string, like *models.FeatureAnalysis) string {
+	if like == nil {
 		return content
 	}
 	sourcePath := filepath.ToSlash(like.Path)
+	featureRoot := ""
+	if idx := strings.Index(sourcePath, "features/"); idx >= 0 {
+		featureRoot = strings.TrimPrefix(sourcePath[:idx+len("features")], "lib/")
+	}
+	if featureRoot == "" {
+		return content
+	}
 	// Source feature path relative to the lib root for import matching
 	// e.g. "features/investment/fund_list"
 	sourceInImport := strings.TrimPrefix(sourcePath, "lib/")
@@ -245,181 +257,10 @@ func stripCrossFeatureImports(content string, conv *models.Convention, like mode
 	return strings.Join(out, "\n")
 }
 
-func likeFeatureFiles(feature models.FeatureAnalysis, baseDir string, naming ...models.NamingConvention) map[string]string {
-	files := map[string]string{}
-	for role, path := range feature.Files {
-		if strings.TrimSpace(path) != "" {
-			files[role] = path
-		}
-	}
-	for role, anatomy := range feature.Anatomy {
-		if strings.TrimSpace(anatomy.Path) != "" {
-			files[role] = anatomy.Path
-		}
-	}
-	if strings.TrimSpace(baseDir) == "" || strings.TrimSpace(feature.Path) == "" {
-		return files
-	}
-	featureDir := feature.Path
-	if !filepath.IsAbs(featureDir) {
-		featureDir = filepath.Join(baseDir, featureDir)
-	}
-	_ = filepath.WalkDir(featureDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if path != featureDir && strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if isGeneratedLikeSourceFile(path) {
-			return nil
-		}
-		if ext := filepath.Ext(path); ext != ".dart" && ext != ".go" {
-			return nil
-		}
-		n := models.NamingConvention{}
-		if len(naming) > 0 {
-			n = naming[0]
-		}
-		role := roleForLikePath(filepath.Base(feature.Path), path, n)
-		if role == "" {
-			return nil
-		}
-		rel, err := filepath.Rel(baseDir, path)
-		if err != nil {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		if hasLikePath(files, rel) {
-			return nil
-		}
-		role = uniqueRole(role, rel, files)
-		files[role] = rel
-		return nil
-	})
-	return files
-}
-
-func isGeneratedLikeSourceFile(path string) bool {
-	base := filepath.Base(path)
-	return strings.HasSuffix(base, ".g.dart") ||
-		strings.HasSuffix(base, ".freezed.dart") ||
-		strings.HasSuffix(base, ".gen.dart") ||
-		strings.HasSuffix(base, ".generated.dart")
-}
-
-func hasLikePath(files map[string]string, path string) bool {
-	for _, existing := range files {
-		if filepath.ToSlash(existing) == path {
-			return true
-		}
-	}
-	return false
-}
-
-func uniqueRole(role, relPath string, files map[string]string) string {
-	if _, exists := files[role]; !exists {
-		return role
-	}
-	dirRole := strings.TrimSuffix(filepath.ToSlash(relPath), filepath.Ext(relPath))
-	dirRole = strings.NewReplacer("/", "_", "\\", "_").Replace(dirRole)
-	dirRole = strings.Trim(dirRole, "_")
-	if dirRole == "" {
-		dirRole = role
-	}
-	candidate := dirRole
-	for i := 2; ; i++ {
-		if _, exists := files[candidate]; !exists {
-			return candidate
-		}
-		candidate = fmt.Sprintf("%s_%d", dirRole, i)
-	}
-}
-
-func roleForLikePath(featureName, path string, naming models.NamingConvention) string {
-	filename := filepath.Base(path)
-	if role := knownTemplateRole(filename, naming); role != "" {
-		return role
-	}
-	ext := filepath.Ext(filename)
-	if ext != ".dart" && ext != ".go" {
-		return ""
-	}
-	base := strings.TrimSuffix(filename, ext)
-	featureSnake := ToSnakeCase(featureName)
-	if strings.HasPrefix(base, featureSnake+"_") {
-		base = strings.TrimPrefix(base, featureSnake+"_")
-	}
-	return strings.Trim(base, "_")
-}
-
-// knownTemplateRole maps a filename to a role using the SuffixRoles map from scan.
-// No hardcoded suffix→role list — the scanner builds and stores this in conventions.json.
-func knownTemplateRole(filename string, naming models.NamingConvention) string {
-	if len(naming.SuffixRoles) == 0 {
-		return ""
-	}
-	base := strings.ToLower(strings.TrimSuffix(filename, filepath.Ext(filename)))
-	// Check longer suffixes first to prefer "repositoryimpl" over "repository".
-	type entry struct{ suffix, role string }
-	entries := make([]entry, 0, len(naming.SuffixRoles))
-	for suffix, role := range naming.SuffixRoles {
-		entries = append(entries, entry{suffix, role})
-	}
-	sort.Slice(entries, func(i, j int) bool { return len(entries[i].suffix) > len(entries[j].suffix) })
-	for _, e := range entries {
-		if strings.HasSuffix(base, "_"+e.suffix) {
-			return e.role
-		}
-	}
-	return ""
-}
-
-func rewriteLikeFeaturePath(path string, ctx TemplateContext, conv *models.Convention, like models.FeatureAnalysis, baseDir string) string {
-	if filepath.IsAbs(path) {
-		if rel, err := filepath.Rel(baseDir, path); err == nil {
-			path = rel
-		}
-	}
-	return rewriteLikeFeatureText(filepath.ToSlash(path), ctx, conv, like, baseDir)
-}
-
-func rewriteLikeFeatureText(content string, ctx TemplateContext, conv *models.Convention, like models.FeatureAnalysis, baseDir string) string {
-	sourcePath := featurePathWithoutRoot(conv.FeatureRoot, like.Path)
-	sourceLeaf := filepath.Base(sourcePath)
-	sourceSnake := ToSnakeCase(sourceLeaf)
-	sourcePascal := ToPascalCase(sourceLeaf)
-	sourceCamel := ToCamelCase(sourceLeaf)
-	targetPath := filepath.ToSlash(ctx.FeaturePath)
-	targetSnake := ctx.SnakeName
-	targetPascal := ctx.PascalName
-	targetCamel := ctx.CamelName
-
-	replacements := map[string]string{
-		filepath.ToSlash(sourcePath): targetPath,
-		displayName(sourceSnake):     displayName(targetSnake),
-	}
-	if sourcePath != "" {
-		replacements[filepath.ToSlash(filepath.Join(conv.FeatureRoot, sourcePath))] = filepath.ToSlash(filepath.Join(conv.FeatureRoot, targetPath))
-	}
-	for source, target := range likeFileBaseReplacements(like, baseDir, sourceSnake, targetSnake) {
-		replacements[source] = target
-	}
-	// Secondary rename: replace the "domain word" — the common non-feature-name word
-	// found in like-feature file stems (e.g. "retirement" in retirement.go,
-	// retirement_plans_repository/). Only underscore-bounded and path-bounded patterns
-	// are replaced to avoid renaming PascalCase domain-data identifiers like RetirementAge.
-	if dw := detectDomainWord(likeFeatureFiles(like, baseDir), sourceSnake); dw != "" && dw != targetSnake {
-		replacements["/"+dw+"/"] = "/" + targetSnake + "/"
-		replacements["/"+dw+"."] = "/" + targetSnake + "."
-		replacements[dw+"_"] = targetSnake + "_"
-		replacements["_"+dw] = "_" + targetSnake
-	}
-	ownedIdentifiers := likeOwnedIdentifiers(like, baseDir, content, sourcePascal, sourceCamel, sourceSnake)
-	for source, target := range likeIdentifierReplacements(ownedIdentifiers, sourcePascal, sourceCamel, sourceSnake, targetPascal, targetCamel, targetSnake) {
+func rewriteLikeFeatureText(content string, plan conventions.FeatureRenamePlan, like models.FeatureAnalysis, baseDir string) string {
+	replacements := plan.Replacements()
+	ownedIdentifiers := likeOwnedIdentifiers(like, plan, baseDir, content)
+	for source, target := range likeIdentifierReplacements(ownedIdentifiers, plan.SourcePascal, plan.SourceCamel, plan.SourceSnake, plan.TargetPascal, plan.TargetCamel, plan.TargetSnake) {
 		replacements[source] = target
 	}
 
@@ -438,76 +279,19 @@ func rewriteLikeFeatureText(content string, ctx TemplateContext, conv *models.Co
 	return content
 }
 
-// detectDomainWord finds the most common non-feature-name word among like-feature
-// file stems. For Go projects where files share a domain prefix (e.g. "retirement.go",
-// "retirement_plan_inputs.go"), this word becomes the secondary rename target so that
-// copy-renamed features use the new feature name in file/directory names.
-func detectDomainWord(files map[string]string, sourceSnake string) string {
-	counts := map[string]int{}
-	for _, path := range files {
-		stem := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-		if strings.HasPrefix(stem, sourceSnake+"_") || stem == sourceSnake {
-			continue
-		}
-		word := firstSnakeWord(stem)
-		if word != "" && !isGenericFeatureName(word) {
-			counts[word]++
-		}
-	}
-	best, bestCount := "", 1 // require at least 2 occurrences
-	for word, count := range counts {
-		if count > bestCount || (count == bestCount && word > best) {
-			best, bestCount = word, count
-		}
-	}
-	return best
-}
-
-func firstSnakeWord(s string) string {
-	if idx := strings.Index(s, "_"); idx != -1 {
-		return s[:idx]
-	}
-	return s
-}
-
-// isGenericFeatureName returns true for common Go feature-structure words that
-// should not be treated as domain rename targets.
-func isGenericFeatureName(word string) bool {
-	switch word {
-	case "handler", "service", "repository", "option", "const", "error", "errors",
-		"logic", "model", "entity", "mock", "unit", "test", "dto", "enum",
-		"config", "client", "server", "router", "middleware", "helper",
-		"controller", "usecase", "request", "response", "delivery":
-		return true
-	}
-	return false
-}
-
-func likeFileBaseReplacements(like models.FeatureAnalysis, baseDir, sourceSnake, targetSnake string) map[string]string {
-	replacements := map[string]string{}
-	for _, path := range likeFeatureFiles(like, baseDir) {
-		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-		if !strings.HasPrefix(base, sourceSnake) {
-			continue
-		}
-		replacements[base] = targetSnake + strings.TrimPrefix(base, sourceSnake)
-	}
-	return replacements
-}
-
-func likeOwnedIdentifiers(like models.FeatureAnalysis, baseDir, content, sourcePascal, sourceCamel, sourceSnake string) map[string]bool {
+func likeOwnedIdentifiers(like models.FeatureAnalysis, plan conventions.FeatureRenamePlan, baseDir, content string) map[string]bool {
 	owned := map[string]bool{}
-	addLeadingFeatureIdentifiers(owned, content, sourcePascal, sourceCamel, sourceSnake)
-	addOwnedIdentifiers(owned, declaredIdentifiers(content), sourcePascal, sourceCamel, sourceSnake)
+	addLeadingFeatureIdentifiers(owned, content, plan.SourcePascal, plan.SourceCamel, plan.SourceSnake)
+	addOwnedIdentifiers(owned, declaredIdentifiers(content), plan.SourcePascal, plan.SourceCamel, plan.SourceSnake)
 	for _, anatomy := range like.Anatomy {
-		addOwnedIdentifiers(owned, anatomy.ClassNames, sourcePascal, sourceCamel, sourceSnake)
-		addOwnedIdentifiers(owned, anatomy.Methods, sourcePascal, sourceCamel, sourceSnake)
+		addOwnedIdentifiers(owned, anatomy.ClassNames, plan.SourcePascal, plan.SourceCamel, plan.SourceSnake)
+		addOwnedIdentifiers(owned, anatomy.Methods, plan.SourcePascal, plan.SourceCamel, plan.SourceSnake)
 	}
-	addOwnedIdentifiers(owned, fileBaseIdentifiers(like, baseDir), sourcePascal, sourceCamel, sourceSnake)
+	addOwnedIdentifiers(owned, fileBaseIdentifiers(plan), plan.SourcePascal, plan.SourceCamel, plan.SourceSnake)
 	if strings.TrimSpace(baseDir) == "" {
 		return owned
 	}
-	for _, path := range likeFeatureFiles(like, baseDir) {
+	for _, path := range plan.Files {
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(baseDir, path)
 		}
@@ -515,7 +299,7 @@ func likeOwnedIdentifiers(like models.FeatureAnalysis, baseDir, content, sourceP
 		if err != nil {
 			continue
 		}
-		addOwnedIdentifiers(owned, declaredIdentifiers(string(data)), sourcePascal, sourceCamel, sourceSnake)
+		addOwnedIdentifiers(owned, declaredIdentifiers(string(data)), plan.SourcePascal, plan.SourceCamel, plan.SourceSnake)
 	}
 	return owned
 }
@@ -545,9 +329,9 @@ func shouldConsiderFeatureIdentifier(item, sourcePascal, sourceCamel, sourceSnak
 	return item != "" && (strings.Contains(item, sourcePascal) || strings.Contains(item, sourceCamel) || strings.Contains(item, sourceSnake))
 }
 
-func fileBaseIdentifiers(like models.FeatureAnalysis, baseDir string) []string {
+func fileBaseIdentifiers(plan conventions.FeatureRenamePlan) []string {
 	var identifiers []string
-	for _, path := range likeFeatureFiles(like, baseDir) {
+	for _, path := range plan.Files {
 		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		if base == "" {
 			continue
@@ -628,17 +412,6 @@ func isIdentifierChar(ch byte) bool {
 	return isIdentifierStart(ch) || (ch >= '0' && ch <= '9')
 }
 
-func displayName(snake string) string {
-	parts := strings.Split(snake, "_")
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		parts[i] = strings.ToUpper(part[:1]) + part[1:]
-	}
-	return strings.Join(parts, " ")
-}
-
 func templateKind(tmplPath string) string {
 	base := filepath.Base(tmplPath)
 	name := strings.TrimSuffix(base, ".tmpl")
@@ -678,24 +451,7 @@ func (g *TemplateGenerator) renderFile(tmplPath string, ctx TemplateContext) (st
 	return buf.String(), nil
 }
 
-// outputPath derives the destination file path from the template filename.
-// Template names follow the pattern: <kind>.<ext>.tmpl → <snakeName>_<kind>.<ext>
-func outputPath(tmplPath string, ctx TemplateContext, conv *models.Convention) string {
-	base := filepath.Base(tmplPath)
-	// strip .tmpl extension
-	name := strings.TrimSuffix(base, ".tmpl")
-	kind := strings.TrimSuffix(name, filepath.Ext(name))
-	// prefix with snake feature name
-	outName := ctx.SnakeName + "_" + name
-
-	// *_test.* → test root; for Go, TestRoot == FeatureRoot so tests stay alongside source.
-	if strings.Contains(kind, "test") {
-		return filepath.Join(conv.TestRoot, ctx.FeaturePath, outName)
-	}
-	return filepath.Join(conv.FeatureRoot, ctx.FeaturePath, routeForKind(conv, ctx.FeaturePath, kind), outName)
-}
-
-func buildContext(featureName string, conv *models.Convention) TemplateContext {
+func buildContext(featureName string, conv *models.Convention, profile *conventions.ProjectProfile) TemplateContext {
 	featurePath := normalizeFeaturePath(featureName)
 	leafName := filepath.Base(featurePath)
 	return TemplateContext{
@@ -706,37 +462,9 @@ func buildContext(featureName string, conv *models.Convention) TemplateContext {
 		SnakeName:     ToSnakeCase(leafName),
 		PackageName:   toGoPackageName(leafName),
 		ModulePath:    conv.ModulePath,
-		Suffixes:      buildSuffixesMap(conv.Naming),
+		Suffixes:      profile.Suffixes(),
 		CommonImports: conv.CommonImports,
 	}
-}
-
-// buildSuffixesMap builds a role → PascalCase suffix map from the scanned NamingConvention.
-// Primary source: SuffixRoles (scanner-built, fully dynamic). The snake suffix key converts
-// back to PascalCase to recover the actual class-name suffix (e.g. "use_case" → "UseCase").
-// Falls back to the named fields for projects that haven't been scanned yet.
-func buildSuffixesMap(naming models.NamingConvention) map[string]string {
-	m := map[string]string{}
-	if len(naming.SuffixRoles) > 0 {
-		for snakeSuffix, role := range naming.SuffixRoles {
-			m[role] = ToPascalCase(snakeSuffix)
-		}
-		return m
-	}
-	add := func(role, suffix string) {
-		if suffix != "" {
-			m[role] = suffix
-		}
-	}
-	add("screen", naming.ScreenSuffix)
-	add("bloc", naming.BlocSuffix)
-	add("event", naming.EventSuffix)
-	add("state", naming.StateSuffix)
-	add("repository", naming.RepositorySuffix)
-	add("usecase", naming.UsecaseSuffix)
-	add("handler", naming.HandlerSuffix)
-	add("service", naming.ServiceSuffix)
-	return m
 }
 
 func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) TemplateContext {
@@ -852,10 +580,15 @@ func isIdentChar(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
 }
 
-func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Convention, activeRoles map[string]bool) TemplateContext {
+func (ctx TemplateContext) withImportsFor(outPath string, profile *conventions.ProjectProfile, activeRoles map[string]bool) TemplateContext {
 	ctx.Imports = map[string]string{}
+	ctx.FileNames = map[string]string{}
+	target := targetFeatureFromContext(ctx)
+	for _, role := range profile.RoleNames() {
+		ctx.FileNames[role] = profile.FileNameForRole(target, role, ".dart")
+	}
 	for role := range activeRoles {
-		path := relativeDartImport(outPath, featureFilePath(conv, ctx, role))
+		path := profile.ImportFor(outPath, target, role)
 		if path != "" {
 			ctx.Imports[role] = path
 		}
@@ -863,9 +596,16 @@ func (ctx TemplateContext) withImportsFor(outPath string, conv *models.Conventio
 	return ctx
 }
 
-func featureFilePath(conv *models.Convention, ctx TemplateContext, kind string) string {
-	outName := ctx.SnakeName + "_" + kind + ".dart"
-	return filepath.Join(conv.FeatureRoot, ctx.FeaturePath, routeForKind(conv, ctx.FeaturePath, kind), outName)
+func targetFeatureFromContext(ctx TemplateContext) conventions.TargetFeature {
+	return conventions.TargetFeature{
+		Name:        ctx.FeatureName,
+		Path:        filepath.ToSlash(ctx.FeaturePath),
+		Leaf:        filepath.Base(ctx.FeaturePath),
+		Snake:       ctx.SnakeName,
+		Pascal:      ctx.PascalName,
+		Camel:       ctx.CamelName,
+		PackageName: ctx.PackageName,
+	}
 }
 
 func normalizeFeaturePath(featureName string) string {
@@ -888,68 +628,4 @@ func normalizeFeaturePath(featureName string) string {
 		return ToSnakeCase(featureName)
 	}
 	return filepath.Join(normalized...)
-}
-
-func routeForKind(conv *models.Convention, featurePath, kind string) string {
-	pattern := conv.FeatureStructure
-	if feature, ok := findFeatureConvention(conv, featurePath); ok {
-		if feature.FileRoutes != nil {
-			if route, exists := feature.FileRoutes[kind]; exists {
-				return route
-			}
-		}
-		if feature.Structure != "" {
-			pattern = feature.Structure
-		}
-	}
-	if pattern == "" {
-		pattern = "flat"
-	}
-	if conv.PatternMappings != nil {
-		if mapping, ok := conv.PatternMappings[pattern]; ok && mapping.FileRoutes != nil {
-			return mapping.FileRoutes[kind]
-		}
-	}
-	return ""
-}
-
-func findFeatureConvention(conv *models.Convention, featurePath string) (models.FeatureAnalysis, bool) {
-	target := filepath.ToSlash(featurePath)
-	targetParent := filepath.ToSlash(filepath.Dir(target))
-	if targetParent == "." {
-		targetParent = ""
-	}
-
-	var sibling models.FeatureAnalysis
-	hasSibling := false
-	for _, feature := range conv.FeaturesAnalysis.Features {
-		relPath := featurePathWithoutRoot(conv.FeatureRoot, feature.Path)
-		if relPath == target {
-			return feature, true
-		}
-		if filepath.ToSlash(feature.Parent) == targetParent {
-			if !hasSibling || feature.Path > sibling.Path {
-				sibling = feature
-				hasSibling = true
-			}
-		}
-	}
-	return sibling, hasSibling
-}
-
-func featurePathWithoutRoot(featureRoot, path string) string {
-	featureRoot = filepath.ToSlash(strings.Trim(featureRoot, "/"))
-	path = filepath.ToSlash(strings.Trim(path, "/"))
-	if featureRoot != "" && strings.HasPrefix(path, featureRoot+"/") {
-		return strings.TrimPrefix(path, featureRoot+"/")
-	}
-	return path
-}
-
-func relativeDartImport(fromPath, toPath string) string {
-	rel, err := filepath.Rel(filepath.Dir(fromPath), toPath)
-	if err != nil {
-		return filepath.ToSlash(toPath)
-	}
-	return filepath.ToSlash(rel)
 }

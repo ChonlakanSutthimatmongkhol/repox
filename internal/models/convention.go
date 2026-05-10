@@ -3,17 +3,18 @@ package models
 
 // Convention holds the detected or configured conventions for a project.
 type Convention struct {
-	ProjectType      string           `json:"project_type"`
-	StateManagement  string           `json:"state_management"`
-	FeatureStructure string           `json:"feature_structure"`
-	FeatureRoot      string           `json:"feature_root"`
-	TestRoot         string           `json:"test_root"`
-	ModulePath       string           `json:"module_path,omitempty"`
-	Naming           NamingConvention `json:"naming"`
-	Routing          RoutingConfig    `json:"routing"`
-	CommonImports    []string         `json:"common_imports"`
-	FeaturesAnalysis FeaturesAnalysis `json:"features_analysis,omitempty"`
-	PatternMappings  PatternMappings  `json:"pattern_mappings,omitempty"`
+	ProjectType      string                    `json:"project_type"`
+	StateManagement  string                    `json:"state_management"`
+	FeatureStructure string                    `json:"feature_structure"`
+	FeatureRoot      string                    `json:"feature_root"`
+	TestRoot         string                    `json:"test_root"`
+	ModulePath       string                    `json:"module_path,omitempty"`
+	Naming           NamingConvention          `json:"naming"`
+	Routing          RoutingConfig             `json:"routing"`
+	CommonImports    []string                  `json:"common_imports"`
+	FeaturesAnalysis FeaturesAnalysis          `json:"features_analysis,omitempty"`
+	PatternMappings  PatternMappings           `json:"pattern_mappings,omitempty"`
+	Roles            map[string]RoleConvention `json:"roles,omitempty"`
 }
 
 // NamingConvention holds the naming suffix and case rules for generated files.
@@ -31,13 +32,19 @@ type NamingConvention struct {
 	// SuffixRoles maps lowercase file suffixes (e.g. "screen", "bloc") to repox
 	// role names (e.g. "screen", "bloc"). Built by the scanner from detected suffixes
 	// so generators need no hardcoded suffix→role mapping.
-	SuffixRoles      map[string]string `json:"suffix_roles,omitempty"`
+	SuffixRoles map[string]string `json:"suffix_roles,omitempty"`
 }
 
 // RoutingConfig holds routing configuration.
 type RoutingConfig struct {
 	Type      string `json:"type"`
 	RouteFile string `json:"route_file"`
+}
+
+// RoleConvention describes how one scanned project role is named on disk and in code.
+type RoleConvention struct {
+	FileSuffix  string `json:"file_suffix,omitempty"`
+	ClassSuffix string `json:"class_suffix,omitempty"`
 }
 
 // FeaturesAnalysis captures the project-wide feature structure scan.

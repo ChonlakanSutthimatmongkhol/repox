@@ -339,6 +339,35 @@ class FundListScreen extends BaseBlocScreen<FundListBloc, FundListState> {
 	assert.Equal(t, "buildContent", analysis.RoleAnatomy["screen"].Methods[0].Name)
 }
 
+func TestAnalyzeFeatureRoot_DiscoversGenericRoleFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "lib/features/fund_list/fund_list_bloc.dart"), "class FundListBloc {}\n")
+	writeFile(t, filepath.Join(dir, "lib/features/fund_list/data/models/fund_list_request.dart"), "class FundListRequest {}\n")
+	writeFile(t, filepath.Join(dir, "lib/features/fund_list/data/models/fund_list_response.dart"), "class FundListResponse {}\n")
+	writeFile(t, filepath.Join(dir, "lib/features/fund_list/data/models/fund_list_payload.dart"), "class FundListPayload {}\n")
+
+	naming := models.NamingConvention{
+		BlocSuffix: "Bloc",
+		SuffixRoles: map[string]string{
+			"bloc": "bloc",
+		},
+	}
+	analysis, err := AnalyzeFeatureRoot(dir, "lib/features", naming)
+	require.NoError(t, err)
+	require.Len(t, analysis.Features, 1)
+
+	feature := analysis.Features[0]
+	assert.Equal(t, "lib/features/fund_list/data/models/fund_list_request.dart", feature.Files["request"])
+	assert.Equal(t, "lib/features/fund_list/data/models/fund_list_response.dart", feature.Files["response"])
+	assert.Equal(t, "lib/features/fund_list/data/models/fund_list_payload.dart", feature.Files["payload"])
+	assert.Equal(t, "data/models", feature.FileRoutes["payload"])
+
+	roles := InferRoleConventions(analysis.Features, naming)
+	assert.Equal(t, models.RoleConvention{FileSuffix: "request", ClassSuffix: "Request"}, roles["request"])
+	assert.Equal(t, models.RoleConvention{FileSuffix: "response", ClassSuffix: "Response"}, roles["response"])
+	assert.Equal(t, models.RoleConvention{FileSuffix: "payload", ClassSuffix: "Payload"}, roles["payload"])
+}
+
 func TestFlutterScanner_EmptyRepo(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "pubspec.yaml"), "flutter:\n  sdk: flutter\n")

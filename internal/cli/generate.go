@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/conventions"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/generator"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/retriever"
@@ -72,6 +73,10 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
 	if err != nil {
 		return fmt.Errorf("generate: load conventions: %w", err)
+	}
+	profile := conventions.NewProjectProfile(&conv)
+	if err := profile.ValidateScanned(); err != nil {
+		return err
 	}
 	if err := applyGeneratePattern(&conv); err != nil {
 		return err
