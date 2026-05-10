@@ -39,14 +39,18 @@ type TemplateContext struct {
 	Suffixes map[string]string
 	// Imports holds relative dart import paths keyed by role name (e.g. "bloc", "usecase").
 	// Populated dynamically from the active roles being generated — no hardcoded role names.
-	Imports           map[string]string
-	FileNames         map[string]string
-	BlocBaseClass     string   // e.g. "BaseBlocScreen" when derived from like anatomy
-	BlocBaseImports   []string // imports required by BlocBaseClass
-	BlocAbstractStubs []string // "@override Sig => throw UnimplementedError();" stubs
-	ScreenBaseClass   string   // e.g. "BaseStatefulWidget" when derived from like anatomy
-	ScreenStateBase   string   // e.g. "BaseState" when derived from like anatomy
-	ScreenBaseImports []string // imports required by ScreenBaseClass
+	Imports   map[string]string
+	FileNames map[string]string
+	Roles     map[string]TemplateRoleContext
+}
+
+// TemplateRoleContext contains scanned anatomy projected into template-friendly fields.
+type TemplateRoleContext struct {
+	Role           string
+	BaseClass      string
+	StateBaseClass string
+	BaseImports    []string
+	AbstractStubs  []string
 }
 
 // GeneratedFile pairs an output path with its rendered content.
@@ -97,7 +101,7 @@ func (g *TemplateGenerator) Generate(featureName, templateName string, conv *mod
 func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string, conv *models.Convention, opts GenerateOptions) ([]GeneratedFile, error) {
 	profile := conventions.NewProjectProfile(conv)
 	ctx := buildContext(featureName, conv, profile)
-	ctx = ctx.withBaseClassesFrom(opts.LikeFeature)
+	ctx = ctx.withRoleAnatomyFrom(opts.LikeFeature)
 	conv = conventionWithLikeTarget(conv, ctx, opts)
 	profile = conventions.NewProjectProfile(conv)
 	target := targetFeatureFromContext(ctx)
@@ -467,25 +471,30 @@ func buildContext(featureName string, conv *models.Convention, profile *conventi
 	}
 }
 
-func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) TemplateContext {
+func (ctx TemplateContext) withRoleAnatomyFrom(like *models.FeatureAnalysis) TemplateContext {
+	ctx.Roles = map[string]TemplateRoleContext{}
 	if like == nil {
 		return ctx
 	}
-	if a, ok := like.Anatomy["bloc"]; ok && len(a.BaseClasses) > 0 {
-		ctx.BlocBaseClass = a.BaseClasses[0]
-		ctx.BlocBaseImports = append(baseClassImports(a.Imports, a.BaseClasses, a.Mixins), abstractStubImports(a.AbstractOverrides, a.Imports)...)
-		ctx.BlocAbstractStubs = buildAbstractStubs(a.AbstractOverrides)
-	}
-	if a, ok := like.Anatomy["screen"]; ok {
-		for _, base := range a.BaseClasses {
-			switch {
-			case strings.HasSuffix(base, "State"):
-				ctx.ScreenStateBase = base
-			default:
-				ctx.ScreenBaseClass = base
+	for role, anatomy := range like.Anatomy {
+		roleCtx := TemplateRoleContext{
+			Role:          role,
+			BaseImports:   append(baseClassImports(anatomy.Imports, anatomy.BaseClasses, anatomy.Mixins), abstractStubImports(anatomy.AbstractOverrides, anatomy.Imports)...),
+			AbstractStubs: buildAbstractStubs(anatomy.AbstractOverrides),
+		}
+		for _, base := range anatomy.BaseClasses {
+			if strings.HasSuffix(base, "State") {
+				roleCtx.StateBaseClass = base
+				continue
+			}
+			if roleCtx.BaseClass == "" {
+				roleCtx.BaseClass = base
 			}
 		}
-		ctx.ScreenBaseImports = baseClassImports(a.Imports, a.BaseClasses, a.Mixins)
+		if roleCtx.BaseClass == "" && len(anatomy.BaseClasses) > 0 {
+			roleCtx.BaseClass = anatomy.BaseClasses[0]
+		}
+		ctx.Roles[role] = roleCtx
 	}
 	return ctx
 }

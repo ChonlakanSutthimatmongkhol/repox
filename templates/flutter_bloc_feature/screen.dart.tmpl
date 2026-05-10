@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-{{- range .ScreenBaseImports}}
+{{- $screen := index .Roles "screen"}}
+{{- range $screen.BaseImports}}
 import '{{.}}';
 {{- end}}
 
 {{- with index .Imports "bloc"}}import '{{.}}';{{end}}
 
-class {{.PascalName}}{{index .Suffixes "screen"}} extends {{if .ScreenBaseClass}}{{.ScreenBaseClass}}{{else}}StatefulWidget{{end}} {
+class {{.PascalName}}{{index .Suffixes "screen"}} extends {{if $screen.BaseClass}}{{$screen.BaseClass}}{{else}}StatefulWidget{{end}} {
   const {{.PascalName}}{{index .Suffixes "screen"}}({super.key});
 
   @override
-  {{if .ScreenStateBase}}{{.ScreenStateBase}}<{{.PascalName}}{{index .Suffixes "screen"}}>{{else}}State<{{.PascalName}}{{index .Suffixes "screen"}}>{{end}} createState() => _{{.PascalName}}{{index .Suffixes "screen"}}State();
+  {{if $screen.StateBaseClass}}{{$screen.StateBaseClass}}<{{.PascalName}}{{index .Suffixes "screen"}}>{{else}}State<{{.PascalName}}{{index .Suffixes "screen"}}>{{end}} createState() => _{{.PascalName}}{{index .Suffixes "screen"}}State();
 }
 
-class _{{.PascalName}}{{index .Suffixes "screen"}}State extends {{if .ScreenStateBase}}{{.ScreenStateBase}}<{{.PascalName}}{{index .Suffixes "screen"}}>{{else}}State<{{.PascalName}}{{index .Suffixes "screen"}}>{{end}} {
+class _{{.PascalName}}{{index .Suffixes "screen"}}State extends {{if $screen.StateBaseClass}}{{$screen.StateBaseClass}}<{{.PascalName}}{{index .Suffixes "screen"}}>{{else}}State<{{.PascalName}}{{index .Suffixes "screen"}}>{{end}} {
   @override
   void initState() {
     super.initState();

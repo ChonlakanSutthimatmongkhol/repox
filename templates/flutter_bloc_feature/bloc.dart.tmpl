@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-{{- range .BlocBaseImports}}
+{{- $bloc := index .Roles "bloc"}}
+{{- range $bloc.BaseImports}}
 import '{{.}}';
 {{- end}}
 {{- with index .Imports "usecase"}}
@@ -9,7 +10,7 @@ import '{{.}}';
 part '{{index .FileNames "event"}}';
 part '{{index .FileNames "state"}}';
 
-class {{.PascalName}}{{index .Suffixes "bloc"}} extends {{if .BlocBaseClass}}{{.BlocBaseClass}}<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{else}}Bloc<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{end}} {
+class {{.PascalName}}{{index .Suffixes "bloc"}} extends {{if $bloc.BaseClass}}{{$bloc.BaseClass}}<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{else}}Bloc<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{end}} {
   {{.PascalName}}{{index .Suffixes "bloc"}}({{with index .Imports "usecase"}}this._{{$.CamelName}}{{index $.Suffixes "usecase"}}{{end}}) : super(const {{.PascalName}}Initial()) {
     on<{{.PascalName}}Started>(_onStarted);
   }
@@ -24,7 +25,7 @@ class {{.PascalName}}{{index .Suffixes "bloc"}} extends {{if .BlocBaseClass}}{{.
     // TODO: implement
     emit(const {{.PascalName}}Loaded());
   }
-{{range .BlocAbstractStubs}}
+{{range $bloc.AbstractStubs}}
   @override
   {{.}}
 {{end}}}
