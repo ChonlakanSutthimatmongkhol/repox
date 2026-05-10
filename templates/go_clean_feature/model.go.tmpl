@@ -1,10 +1,10 @@
 package {{.PackageName}}
 
-type {{.PascalName}}Request struct {
+type {{.Class "request"}} struct {
 	ID string `json:"id"`
 }
 
-type {{.PascalName}}Response struct {
+type {{.Class "response"}} struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }

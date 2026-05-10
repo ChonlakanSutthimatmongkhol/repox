@@ -191,6 +191,202 @@ func TestGenerate_UsesRoleConventionsForNamesAndImports(t *testing.T) {
 	assert.Contains(t, byPath[blocPath], "class FundListController extends Bloc<FundListSignal, FundListSnapshot>")
 }
 
+func TestGenerate_FlutterTemplatesUseScannedRoleClassNames(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "clean_architecture"
+	conv.CommonImports = []string{
+		"package:app/ui/material.dart",
+		"package:app/state/custom_bloc.dart",
+	}
+	conv.Roles["request"] = models.RoleConvention{FileSuffix: "query", ClassSuffix: "Query"}
+	conv.Roles["response"] = models.RoleConvention{FileSuffix: "result", ClassSuffix: "Result"}
+	conv.Roles["repository"] = models.RoleConvention{FileSuffix: "gateway", ClassSuffix: "Gateway"}
+	conv.Roles["repository_impl"] = models.RoleConvention{FileSuffix: "gateway_adapter", ClassSuffix: "GatewayAdapter"}
+	conv.Roles["usecase"] = models.RoleConvention{FileSuffix: "interactor", ClassSuffix: "Interactor"}
+
+	files, err := gen.GenerateWithOptions("fund_list", "flutter_bloc_feature", &conv, GenerateOptions{
+		Roles: []string{"request", "response", "repository", "repository_impl", "usecase", "screen"},
+	})
+	require.NoError(t, err)
+
+	byPath := make(map[string]string, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f.Content
+	}
+
+	requestPath := "lib/features/fund_list/data/models/fund_list_query.dart"
+	responsePath := "lib/features/fund_list/data/models/fund_list_result.dart"
+	repoPath := "lib/features/fund_list/domain/repositories/fund_list_gateway.dart"
+	repoImplPath := "lib/features/fund_list/data/repositories/fund_list_gateway_adapter.dart"
+	usecasePath := "lib/features/fund_list/domain/usecases/fund_list_interactor.dart"
+	screenPath := "lib/features/fund_list/presentation/screen/fund_list_screen.dart"
+
+	require.Contains(t, byPath, requestPath)
+	require.Contains(t, byPath, responsePath)
+	require.Contains(t, byPath, repoPath)
+	require.Contains(t, byPath, repoImplPath)
+	require.Contains(t, byPath, usecasePath)
+	assert.Contains(t, byPath[requestPath], "class FundListQuery")
+	assert.Contains(t, byPath[responsePath], "class FundListResult")
+	assert.Contains(t, byPath[repoPath], "abstract class FundListGateway")
+	assert.Contains(t, byPath[repoPath], "Future<FundListResult> fetch(FundListQuery request);")
+	assert.Contains(t, byPath[repoImplPath], "class FundListGatewayAdapter implements FundListGateway")
+	assert.Contains(t, byPath[usecasePath], "class FundListInteractor")
+	assert.Contains(t, byPath[usecasePath], "final FundListGateway _repository;")
+	assert.Contains(t, byPath[screenPath], "import 'package:app/ui/material.dart';")
+	assert.Contains(t, byPath[screenPath], "import 'package:app/state/custom_bloc.dart';")
+}
+
+func TestGenerate_GoTemplatesUseScannedRoleClassNames(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.ProjectType = "go"
+	conv.FeatureRoot = "internal"
+	conv.TestRoot = "internal"
+	conv.FeatureStructure = "flat"
+	conv.Roles = map[string]models.RoleConvention{
+		"handler":         {FileSuffix: "endpoint", ClassSuffix: "Endpoint"},
+		"service":         {FileSuffix: "workflow", ClassSuffix: "Workflow"},
+		"repository":      {FileSuffix: "store", ClassSuffix: "Store"},
+		"repository_impl": {FileSuffix: "store_impl", ClassSuffix: "StoreImpl"},
+		"request":         {FileSuffix: "query", ClassSuffix: "Query"},
+		"response":        {FileSuffix: "result", ClassSuffix: "Result"},
+		"model":           {FileSuffix: "model", ClassSuffix: "Model"},
+		"handler_test":    {FileSuffix: "endpoint_test", ClassSuffix: "EndpointTest"},
+	}
+	conv.PatternMappings = models.PatternMappings{
+		"flat": {FileRoutes: map[string]string{
+			"handler":         "",
+			"service":         "",
+			"repository":      "",
+			"repository_impl": "",
+			"model":           "",
+			"handler_test":    "",
+		}},
+	}
+
+	files, err := gen.Generate("payment", "go_clean_feature", &conv)
+	require.NoError(t, err)
+
+	byPath := make(map[string]string, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f.Content
+	}
+
+	handlerPath := "internal/payment/payment_endpoint.go"
+	modelPath := "internal/payment/payment_model.go"
+	repoPath := "internal/payment/payment_store.go"
+	repoImplPath := "internal/payment/payment_store_impl.go"
+	servicePath := "internal/payment/payment_workflow.go"
+	testPath := "internal/payment/payment_endpoint_test.go"
+
+	require.Contains(t, byPath, handlerPath)
+	require.Contains(t, byPath, modelPath)
+	require.Contains(t, byPath, repoPath)
+	require.Contains(t, byPath, repoImplPath)
+	require.Contains(t, byPath, servicePath)
+	require.Contains(t, byPath, testPath)
+	assert.Contains(t, byPath[handlerPath], "type PaymentEndpoint struct")
+	assert.Contains(t, byPath[handlerPath], "svc PaymentWorkflow")
+	assert.Contains(t, byPath[handlerPath], "req := &PaymentQuery")
+	assert.Contains(t, byPath[modelPath], "type PaymentQuery struct")
+	assert.Contains(t, byPath[modelPath], "type PaymentResult struct")
+	assert.Contains(t, byPath[repoPath], "type PaymentStore interface")
+	assert.Contains(t, byPath[repoImplPath], "type PaymentStoreImpl struct")
+	assert.Contains(t, byPath[servicePath], "type PaymentWorkflow interface")
+	assert.Contains(t, byPath[testPath], "func TestPaymentEndpoint_Get")
+}
+
+func TestGenerate_SynthesizesDartRoleFromScannedAnatomy(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.FeatureStructure = "clean_architecture"
+	conv.Roles["analytics"] = models.RoleConvention{FileSuffix: "analytics", ClassSuffix: "Analytics"}
+	conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{
+		{
+			Name:      "existing",
+			Path:      "lib/features/existing",
+			Structure: "clean_architecture",
+			FileRoutes: map[string]string{
+				"analytics": "presentation/firebase",
+			},
+			Anatomy: map[string]models.FileAnatomy{
+				"analytics": {
+					Role:       "analytics",
+					Path:       "lib/features/existing/presentation/firebase/existing_analytics.dart",
+					ClassNames: []string{"ExistingAnalytics"},
+					Types: []models.TypeAnatomy{
+						{Name: "ExistingAnalytics", Kind: "class"},
+					},
+					Functions: []models.FunctionSignature{
+						{Name: "trackScreenView", ReturnType: "void", Signature: "void trackScreenView()", IsMethod: true},
+					},
+				},
+			},
+		},
+	}
+
+	files, err := gen.GenerateWithOptions("fund_list", "flutter_bloc_feature", &conv, GenerateOptions{
+		Roles:         []string{"analytics"},
+		RolesExplicit: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+
+	assert.Equal(t, "lib/features/fund_list/presentation/firebase/fund_list_analytics.dart", files[0].Path)
+	assert.Contains(t, files[0].Content, "class FundListAnalytics")
+	assert.Contains(t, files[0].Content, "const FundListAnalytics();")
+	assert.Contains(t, files[0].Content, "void trackScreenView()")
+}
+
+func TestGenerate_SynthesizesGoRoleFromScannedAnatomy(t *testing.T) {
+	gen := NewTemplateGenerator()
+	conv := config.DefaultConventions()
+	conv.ProjectType = "go"
+	conv.FeatureRoot = "internal"
+	conv.TestRoot = "internal"
+	conv.FeatureStructure = "flat"
+	conv.Roles = map[string]models.RoleConvention{
+		"analytics": {FileSuffix: "analytics", ClassSuffix: "Analytics"},
+	}
+	conv.FeaturesAnalysis.Features = []models.FeatureAnalysis{
+		{
+			Name:      "payment",
+			Path:      "internal/payment",
+			Structure: "flat",
+			FileRoutes: map[string]string{
+				"analytics": "",
+			},
+			Anatomy: map[string]models.FileAnatomy{
+				"analytics": {
+					Role:       "analytics",
+					Path:       "internal/payment/payment_analytics.go",
+					ClassNames: []string{"PaymentAnalytics"},
+					Types: []models.TypeAnatomy{
+						{Name: "PaymentAnalytics", Kind: "struct"},
+					},
+					Functions: []models.FunctionSignature{
+						{Name: "Track", Receiver: "a *PaymentAnalytics", Params: []models.Parameter{{Name: "name", Type: "string"}}, IsMethod: true},
+					},
+				},
+			},
+		},
+	}
+
+	files, err := gen.GenerateWithOptions("refund", "go_clean_feature", &conv, GenerateOptions{
+		Roles:         []string{"analytics"},
+		RolesExplicit: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+
+	assert.Equal(t, "internal/refund/refund_analytics.go", files[0].Path)
+	assert.Contains(t, files[0].Content, "package refund")
+	assert.Contains(t, files[0].Content, "type RefundAnalytics struct{}")
+	assert.Contains(t, files[0].Content, "func (x *RefundAnalytics) Track(name string)")
+}
+
 func TestGenerateWithOptions_FiltersRoles(t *testing.T) {
 	gen := NewTemplateGenerator()
 	conv := config.DefaultConventions()

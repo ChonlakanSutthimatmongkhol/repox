@@ -44,6 +44,54 @@ type TemplateContext struct {
 	Roles     map[string]TemplateRoleContext
 }
 
+func (ctx TemplateContext) Class(role string) string {
+	return ctx.PascalName + ctx.Suffix(role)
+}
+
+func (ctx TemplateContext) Var(role string) string {
+	return ctx.CamelName + ctx.Suffix(role)
+}
+
+func (ctx TemplateContext) File(role string) string {
+	if fileName, ok := ctx.FileNames[role]; ok && fileName != "" {
+		return fileName
+	}
+	return ctx.SnakeName + "_" + role + ".dart"
+}
+
+func (ctx TemplateContext) Import(role string) string {
+	return ctx.Imports[role]
+}
+
+func (ctx TemplateContext) CommonImport(match string) string {
+	return ctx.CommonImportAny(match)
+}
+
+func (ctx TemplateContext) CommonImportAny(matches ...string) string {
+	for _, match := range matches {
+		if match == "" {
+			continue
+		}
+		for _, imp := range ctx.CommonImports {
+			if strings.Contains(imp, match) {
+				return imp
+			}
+		}
+	}
+	return ""
+}
+
+func (ctx TemplateContext) Role(role string) TemplateRoleContext {
+	return ctx.Roles[role]
+}
+
+func (ctx TemplateContext) Suffix(role string) string {
+	if suffix, ok := ctx.Suffixes[role]; ok && suffix != "" {
+		return suffix
+	}
+	return ToPascalCase(role)
+}
+
 // TemplateRoleContext contains scanned anatomy projected into template-friendly fields.
 type TemplateRoleContext struct {
 	Role           string
@@ -111,7 +159,7 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 	if err != nil {
 		return nil, fmt.Errorf("generator: glob %s: %w", pattern, err)
 	}
-	if len(entries) == 0 {
+	if len(entries) == 0 && len(opts.Roles) == 0 {
 		return nil, fmt.Errorf("generator: no templates found for %q", templateName)
 	}
 
@@ -161,6 +209,7 @@ func (g *TemplateGenerator) GenerateWithOptions(featureName, templateName string
 		generatedRoles[kind] = true
 	}
 	out = append(out, renderLikeAncillaryFiles(ctx, profile, opts, allowedRoles, generatedRoles)...)
+	out = append(out, renderScannedRoleFiles(ctx, profile, conv, target, opts, generatedRoles)...)
 	return out, nil
 }
 
@@ -211,6 +260,26 @@ func renderLikeAncillaryFiles(ctx TemplateContext, profile *conventions.ProjectP
 			continue
 		}
 		out = append(out, GeneratedFile{Path: outPath, Content: content})
+		generatedRoles[role] = true
+	}
+	return out
+}
+
+func renderScannedRoleFiles(ctx TemplateContext, profile *conventions.ProjectProfile, conv *models.Convention, target conventions.TargetFeature, opts GenerateOptions, generatedRoles map[string]bool) []GeneratedFile {
+	if len(opts.Roles) == 0 {
+		return nil
+	}
+	builder := NewScannedTemplateBuilder(conv, profile)
+	var out []GeneratedFile
+	for _, role := range opts.Roles {
+		if role == "" || generatedRoles[role] {
+			continue
+		}
+		file, ok := builder.Build(ctx, target, role)
+		if !ok {
+			continue
+		}
+		out = append(out, file)
 		generatedRoles[role] = true
 	}
 	return out

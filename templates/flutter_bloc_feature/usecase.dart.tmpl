@@ -1,13 +1,13 @@
-import '{{index .Imports "repository"}}';
-import '{{index .Imports "request"}}';
-import '{{index .Imports "response"}}';
+import '{{.Import "repository"}}';
+import '{{.Import "request"}}';
+import '{{.Import "response"}}';
 
-class {{.PascalName}}{{index .Suffixes "usecase"}} {
-  const {{.PascalName}}{{index .Suffixes "usecase"}}(this._repository);
+class {{.Class "usecase"}} {
+  const {{.Class "usecase"}}(this._repository);
 
-  final {{.PascalName}}{{index .Suffixes "repository"}} _repository;
+  final {{.Class "repository"}} _repository;
 
-  Future<{{.PascalName}}Response> call({{.PascalName}}Request request) {
+  Future<{{.Class "response"}}> call({{.Class "request"}} request) {
     return _repository.fetch(request);
   }
 }

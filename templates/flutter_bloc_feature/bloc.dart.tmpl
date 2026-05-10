@@ -1,25 +1,29 @@
+{{- with .CommonImportAny "flutter_bloc" "bloc"}}
+import '{{.}}';
+{{- else}}
 import 'package:flutter_bloc/flutter_bloc.dart';
-{{- $bloc := index .Roles "bloc"}}
+{{- end}}
+{{- $bloc := .Role "bloc"}}
 {{- range $bloc.BaseImports}}
 import '{{.}}';
 {{- end}}
-{{- with index .Imports "usecase"}}
+{{- with .Import "usecase"}}
 import '{{.}}';
 {{- end}}
 
-part '{{index .FileNames "event"}}';
-part '{{index .FileNames "state"}}';
+part '{{.File "event"}}';
+part '{{.File "state"}}';
 
-class {{.PascalName}}{{index .Suffixes "bloc"}} extends {{if $bloc.BaseClass}}{{$bloc.BaseClass}}<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{else}}Bloc<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{end}} {
-  {{.PascalName}}{{index .Suffixes "bloc"}}({{with index .Imports "usecase"}}this._{{$.CamelName}}{{index $.Suffixes "usecase"}}{{end}}) : super(const {{.PascalName}}Initial()) {
+class {{.Class "bloc"}} extends {{if $bloc.BaseClass}}{{$bloc.BaseClass}}<{{.Class "event"}}, {{.Class "state"}}>{{else}}Bloc<{{.Class "event"}}, {{.Class "state"}}>{{end}} {
+  {{.Class "bloc"}}({{with .Import "usecase"}}this._{{$.Var "usecase"}}{{end}}) : super(const {{.PascalName}}Initial()) {
     on<{{.PascalName}}Started>(_onStarted);
   }
-{{with index .Imports "usecase"}}
-  final {{$.PascalName}}{{index $.Suffixes "usecase"}} _{{$.CamelName}}{{index $.Suffixes "usecase"}};
+{{with .Import "usecase"}}
+  final {{$.Class "usecase"}} _{{$.Var "usecase"}};
 {{end}}
   Future<void> _onStarted(
     {{.PascalName}}Started event,
-    Emitter<{{.PascalName}}{{index .Suffixes "state"}}> emit,
+    Emitter<{{.Class "state"}}> emit,
   ) async {
     emit(const {{.PascalName}}Loading());
     // TODO: implement

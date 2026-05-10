@@ -1,22 +1,22 @@
-part of '{{.SnakeName}}_bloc.dart';
+part of '{{.File "bloc"}}';
 
-sealed class {{.PascalName}}{{index .Suffixes "state"}} {
-  const {{.PascalName}}{{index .Suffixes "state"}}();
+sealed class {{.Class "state"}} {
+  const {{.Class "state"}}();
 }
 
-final class {{.PascalName}}Initial extends {{.PascalName}}{{index .Suffixes "state"}} {
+final class {{.PascalName}}Initial extends {{.Class "state"}} {
   const {{.PascalName}}Initial();
 }
 
-final class {{.PascalName}}Loading extends {{.PascalName}}{{index .Suffixes "state"}} {
+final class {{.PascalName}}Loading extends {{.Class "state"}} {
   const {{.PascalName}}Loading();
 }
 
-final class {{.PascalName}}Loaded extends {{.PascalName}}{{index .Suffixes "state"}} {
+final class {{.PascalName}}Loaded extends {{.Class "state"}} {
   const {{.PascalName}}Loaded();
 }
 
-final class {{.PascalName}}Error extends {{.PascalName}}{{index .Suffixes "state"}} {
+final class {{.PascalName}}Error extends {{.Class "state"}} {
   const {{.PascalName}}Error(this.message);
   final String message;
 }

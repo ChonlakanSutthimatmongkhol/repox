@@ -1,9 +1,9 @@
-part of '{{.SnakeName}}_bloc.dart';
+part of '{{.File "bloc"}}';
 
-sealed class {{.PascalName}}{{index .Suffixes "event"}} {
-  const {{.PascalName}}{{index .Suffixes "event"}}();
+sealed class {{.Class "event"}} {
+  const {{.Class "event"}}();
 }
 
-final class {{.PascalName}}Started extends {{.PascalName}}{{index .Suffixes "event"}} {
+final class {{.PascalName}}Started extends {{.Class "event"}} {
   const {{.PascalName}}Started();
 }

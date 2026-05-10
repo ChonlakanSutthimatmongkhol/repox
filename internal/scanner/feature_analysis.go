@@ -280,7 +280,7 @@ func hasImmediateFeatureRoleFile(path string, naming models.NamingConvention) bo
 		if entry.IsDir() {
 			continue
 		}
-		if roleForFeatureFile(entry.Name(), naming) != "" {
+		if roleForFeaturePath(path, filepath.Join(path, entry.Name()), naming) != "" {
 			return true
 		}
 	}
@@ -307,7 +307,7 @@ func hasFeatureRoleFilesUnderInternalDirs(path string, naming models.NamingConve
 				}
 				return nil
 			}
-			if roleForFeatureFile(d.Name(), naming) != "" {
+			if roleForFeaturePath(path, childPath, naming) != "" {
 				found = true
 				return filepath.SkipAll
 			}

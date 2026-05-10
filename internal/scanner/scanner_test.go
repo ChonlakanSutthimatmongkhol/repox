@@ -368,6 +368,49 @@ func TestAnalyzeFeatureRoot_DiscoversGenericRoleFiles(t *testing.T) {
 	assert.Equal(t, models.RoleConvention{FileSuffix: "payload", ClassSuffix: "Payload"}, roles["payload"])
 }
 
+func TestAnalyzeFeatureRoot_CapturesTypeAndFunctionSignatures(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "lib/features/fund_list/fund_list_analytics.dart"), `
+class FundListAnalytics {
+  const FundListAnalytics();
+
+  Future<bool> trackScreenView(String name, int count) async => true;
+}
+`)
+	writeFile(t, filepath.Join(dir, "internal/payment/payment_worker.go"), `
+package payment
+
+type PaymentWorker struct{}
+
+func (w *PaymentWorker) Run(ctx context.Context, id string) (string, error) {
+	return "", nil
+}
+`)
+
+	flutterAnalysis, err := AnalyzeFeatureRoot(dir, "lib/features")
+	require.NoError(t, err)
+	require.Len(t, flutterAnalysis.Features, 1)
+	dartAnatomy := flutterAnalysis.Features[0].Anatomy["analytics"]
+	require.NotEmpty(t, dartAnatomy.Types)
+	require.NotEmpty(t, dartAnatomy.Functions)
+	assert.Equal(t, "FundListAnalytics", dartAnatomy.Types[0].Name)
+	assert.Equal(t, "trackScreenView", dartAnatomy.Functions[0].Name)
+	assert.Equal(t, "Future<bool>", dartAnatomy.Functions[0].ReturnType)
+	assert.Equal(t, []models.Parameter{{Name: "name", Type: "String"}, {Name: "count", Type: "int"}}, dartAnatomy.Functions[0].Params)
+
+	goAnalysis, err := AnalyzeFeatureRoot(dir, "internal")
+	require.NoError(t, err)
+	require.Len(t, goAnalysis.Features, 1)
+	goAnatomy := goAnalysis.Features[0].Anatomy["worker"]
+	require.NotEmpty(t, goAnatomy.Types)
+	require.NotEmpty(t, goAnatomy.Functions)
+	assert.Equal(t, "PaymentWorker", goAnatomy.Types[0].Name)
+	assert.Equal(t, "struct", goAnatomy.Types[0].Kind)
+	assert.Equal(t, "Run", goAnatomy.Functions[0].Name)
+	assert.Equal(t, "w *PaymentWorker", goAnatomy.Functions[0].Receiver)
+	assert.Equal(t, "(string, error)", goAnatomy.Functions[0].Returns)
+}
+
 func TestFlutterScanner_EmptyRepo(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "pubspec.yaml"), "flutter:\n  sdk: flutter\n")

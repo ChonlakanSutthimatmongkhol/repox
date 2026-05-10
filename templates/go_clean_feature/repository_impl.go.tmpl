@@ -2,13 +2,13 @@ package {{.PackageName}}
 
 import "context"
 
-type {{.PascalName}}{{index .Suffixes "repository"}}Impl struct{}
+type {{.Class "repository_impl"}} struct{}
 
-func New{{.PascalName}}{{index .Suffixes "repository"}}() {{.PascalName}}{{index .Suffixes "repository"}} {
-	return &{{.PascalName}}{{index .Suffixes "repository"}}Impl{}
+func New{{.Class "repository"}}() {{.Class "repository"}} {
+	return &{{.Class "repository_impl"}}{}
 }
 
-func (r *{{.PascalName}}{{index .Suffixes "repository"}}Impl) FindByID(ctx context.Context, id string) (*{{.PascalName}}Response, error) {
+func (r *{{.Class "repository_impl"}}) FindByID(ctx context.Context, id string) (*{{.Class "response"}}, error) {
 	// TODO: implement
 	return nil, nil
 }

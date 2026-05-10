@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func Test{{.PascalName}}{{index .Suffixes "handler"}}_Get(t *testing.T) {
+func Test{{.Class "handler"}}_Get(t *testing.T) {
 	t.Run("returns 200", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/{{.SnakeName}}", nil)

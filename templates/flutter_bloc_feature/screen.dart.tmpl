@@ -1,31 +1,39 @@
+{{- with .CommonImportAny "flutter/material" "material"}}
+import '{{.}}';
+{{- else}}
 import 'package:flutter/material.dart';
+{{- end}}
+{{- with .CommonImportAny "flutter_bloc" "bloc"}}
+import '{{.}}';
+{{- else}}
 import 'package:flutter_bloc/flutter_bloc.dart';
-{{- $screen := index .Roles "screen"}}
+{{- end}}
+{{- $screen := .Role "screen"}}
 {{- range $screen.BaseImports}}
 import '{{.}}';
 {{- end}}
 
-{{- with index .Imports "bloc"}}import '{{.}}';{{end}}
+{{- with .Import "bloc"}}import '{{.}}';{{end}}
 
-class {{.PascalName}}{{index .Suffixes "screen"}} extends {{if $screen.BaseClass}}{{$screen.BaseClass}}{{else}}StatefulWidget{{end}} {
-  const {{.PascalName}}{{index .Suffixes "screen"}}({super.key});
+class {{.Class "screen"}} extends {{if $screen.BaseClass}}{{$screen.BaseClass}}{{else}}StatefulWidget{{end}} {
+  const {{.Class "screen"}}({super.key});
 
   @override
-  {{if $screen.StateBaseClass}}{{$screen.StateBaseClass}}<{{.PascalName}}{{index .Suffixes "screen"}}>{{else}}State<{{.PascalName}}{{index .Suffixes "screen"}}>{{end}} createState() => _{{.PascalName}}{{index .Suffixes "screen"}}State();
+  {{if $screen.StateBaseClass}}{{$screen.StateBaseClass}}<{{.Class "screen"}}>{{else}}State<{{.Class "screen"}}>{{end}} createState() => _{{.Class "screen"}}State();
 }
 
-class _{{.PascalName}}{{index .Suffixes "screen"}}State extends {{if $screen.StateBaseClass}}{{$screen.StateBaseClass}}<{{.PascalName}}{{index .Suffixes "screen"}}>{{else}}State<{{.PascalName}}{{index .Suffixes "screen"}}>{{end}} {
+class _{{.Class "screen"}}State extends {{if $screen.StateBaseClass}}{{$screen.StateBaseClass}}<{{.Class "screen"}}>{{else}}State<{{.Class "screen"}}>{{end}} {
   @override
   void initState() {
     super.initState();
-    context.read<{{.PascalName}}{{index .Suffixes "bloc"}}>().add(const {{.PascalName}}Started());
+    context.read<{{.Class "bloc"}}>().add(const {{.PascalName}}Started());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('{{.PascalName}}')),
-      body: BlocBuilder<{{.PascalName}}{{index .Suffixes "bloc"}}, {{.PascalName}}{{index .Suffixes "state"}}>(
+      body: BlocBuilder<{{.Class "bloc"}}, {{.Class "state"}}>(
         builder: (context, state) {
           return switch (state) {
             {{.PascalName}}Initial() => const SizedBox.shrink(),

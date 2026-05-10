@@ -1,6 +1,6 @@
-import '{{index .Imports "request"}}';
-import '{{index .Imports "response"}}';
+import '{{.Import "request"}}';
+import '{{.Import "response"}}';
 
-abstract class {{.PascalName}}{{index .Suffixes "repository"}} {
-  Future<{{.PascalName}}Response> fetch({{.PascalName}}Request request);
+abstract class {{.Class "repository"}} {
+  Future<{{.Class "response"}}> fetch({{.Class "request"}} request);
 }

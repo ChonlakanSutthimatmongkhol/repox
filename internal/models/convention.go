@@ -72,17 +72,48 @@ type FeatureAnalysis struct {
 
 // FileAnatomy captures the structural shape of one role file.
 type FileAnatomy struct {
-	Role                string   `json:"role"`
-	Path                string   `json:"path"`
-	ClassNames          []string `json:"class_names,omitempty"`
-	BaseClasses         []string `json:"base_classes,omitempty"`
-	Mixins              []string `json:"mixins,omitempty"`
-	Methods             []string `json:"methods,omitempty"`
-	AbstractOverrides   []string `json:"abstract_overrides,omitempty"` // "@override" public method signatures
-	ConstructorDeps     []string `json:"constructor_deps,omitempty"`
-	Imports             []string `json:"imports,omitempty"`
-	Capabilities        []string `json:"capabilities,omitempty"`
-	HasFirebaseTracking bool     `json:"has_firebase_tracking,omitempty"`
+	Role                string              `json:"role"`
+	Path                string              `json:"path"`
+	ClassNames          []string            `json:"class_names,omitempty"`
+	Types               []TypeAnatomy       `json:"types,omitempty"`
+	Functions           []FunctionSignature `json:"functions,omitempty"`
+	BaseClasses         []string            `json:"base_classes,omitempty"`
+	Mixins              []string            `json:"mixins,omitempty"`
+	Methods             []string            `json:"methods,omitempty"`
+	AbstractOverrides   []string            `json:"abstract_overrides,omitempty"` // "@override" public method signatures
+	ConstructorDeps     []string            `json:"constructor_deps,omitempty"`
+	Imports             []string            `json:"imports,omitempty"`
+	Capabilities        []string            `json:"capabilities,omitempty"`
+	HasFirebaseTracking bool                `json:"has_firebase_tracking,omitempty"`
+}
+
+// TypeAnatomy captures a scanned type declaration.
+type TypeAnatomy struct {
+	Name       string              `json:"name"`
+	Kind       string              `json:"kind,omitempty"`
+	Extends    string              `json:"extends,omitempty"`
+	Implements []string            `json:"implements,omitempty"`
+	Mixins     []string            `json:"mixins,omitempty"`
+	Methods    []FunctionSignature `json:"methods,omitempty"`
+}
+
+// FunctionSignature captures a scanned function or method signature.
+type FunctionSignature struct {
+	Name       string      `json:"name"`
+	Receiver   string      `json:"receiver,omitempty"`
+	ReturnType string      `json:"return_type,omitempty"`
+	Returns    string      `json:"returns,omitempty"`
+	Params     []Parameter `json:"params,omitempty"`
+	Signature  string      `json:"signature,omitempty"`
+	IsMethod   bool        `json:"is_method,omitempty"`
+	IsAsync    bool        `json:"is_async,omitempty"`
+	IsOverride bool        `json:"is_override,omitempty"`
+}
+
+// Parameter captures a scanned function parameter.
+type Parameter struct {
+	Name string `json:"name,omitempty"`
+	Type string `json:"type,omitempty"`
 }
 
 // RoleAnatomy summarizes common anatomy for a role across discovered features.

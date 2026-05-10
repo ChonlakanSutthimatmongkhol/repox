@@ -12,9 +12,10 @@ import (
 
 var (
 	dartClassRe  = regexp.MustCompile(`(?m)\bclass\s+([A-Za-z_]\w*)(?:\s*<[^>{}]*>)?(?:\s+extends\s+([A-Za-z_]\w*(?:<[^>{}]*>)?))?(?:\s+with\s+([^{]+?))?(?:\s+implements\s+([^{]+?))?\s*\{`)
+	dartSigRe    = regexp.MustCompile(`^(?:(?:static|external)\s+)*(Future(?:<[^>]+>)?|Stream(?:<[^>]+>)?|void|Widget|bool|String|int|double|[A-Za-z_]\w*(?:<[^;{=]*>)?)\s+([A-Za-z_]\w*)\s*\((.*)\)\s*(?:async\s*)?(?:\{|=>|;)?`)
 	dartMethodRe = regexp.MustCompile(`^(?:Future(?:<[^>]+>)?|Stream(?:<[^>]+>)?|void|Widget|bool|String|int|double|[A-Za-z_]\w*(?:<[^;{=]*>)?)\s+([A-Za-z_]\w*)\s*\(`)
-	goFuncRe     = regexp.MustCompile(`(?m)^func\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)\s*\(`)
-	goTypeRe     = regexp.MustCompile(`(?m)^type\s+([A-Za-z_]\w*)\s+(?:struct|interface)\b`)
+	goFuncRe     = regexp.MustCompile(`(?m)^func\s+(?:\(([^)]*)\)\s*)?([A-Za-z_]\w*)\s*\(([^)]*)\)\s*([^{\n]*)`)
+	goTypeRe     = regexp.MustCompile(`(?m)^type\s+([A-Za-z_]\w*)\s+(struct|interface)\b`)
 	depTypeRe    = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_]*(?:UseCase|Repository|Repo|Service|Analytics|Bloc|Cubit|Client|DataSource))\b`)
 	getItTypeRe  = regexp.MustCompile(`(?:getIt|locator|serviceLocator|sl)\s*<\s*([A-Z][A-Za-z0-9_]*)\s*>`)
 )
@@ -47,12 +48,16 @@ func analyzeFileAnatomy(role, relPath, fullPath string) models.FileAnatomy {
 	case ".dart":
 		item.Imports, _ = parseDartImports(fullPath)
 		item.ClassNames, item.BaseClasses, item.Mixins = parseDartClasses(content)
+		item.Types = parseDartTypes(content)
+		item.Functions = parseDartFunctionSignatures(content)
 		item.Methods = parseDartMethods(content)
 		item.AbstractOverrides = parseDartAbstractOverrides(content)
 		item.ConstructorDeps = parseDependencyTypes(content)
 	case ".go":
 		item.Imports, _ = parseGoImports(fullPath)
 		item.ClassNames = parseGoTypes(content)
+		item.Types = parseGoTypeAnatomy(content)
+		item.Functions = parseGoFunctionSignatures(content)
 		item.Methods = parseGoFuncs(content)
 		item.ConstructorDeps = parseDependencyTypes(content)
 	}
@@ -65,12 +70,78 @@ func analyzeFileAnatomy(role, relPath, fullPath string) models.FileAnatomy {
 
 func hasAnatomy(item models.FileAnatomy) bool {
 	return len(item.ClassNames) > 0 ||
+		len(item.Types) > 0 ||
+		len(item.Functions) > 0 ||
 		len(item.BaseClasses) > 0 ||
 		len(item.Mixins) > 0 ||
 		len(item.Methods) > 0 ||
 		len(item.ConstructorDeps) > 0 ||
 		len(item.Imports) > 0 ||
 		len(item.Capabilities) > 0
+}
+
+func parseDartTypes(content string) []models.TypeAnatomy {
+	var types []models.TypeAnatomy
+	methods := parseDartFunctionSignatures(content)
+	for _, match := range dartClassRe.FindAllStringSubmatch(content, -1) {
+		if len(match) < 2 || match[1] == "" {
+			continue
+		}
+		item := models.TypeAnatomy{
+			Name:    match[1],
+			Kind:    "class",
+			Methods: methods,
+		}
+		if len(match) > 2 {
+			item.Extends = cleanTypeName(match[2])
+		}
+		if len(match) > 3 {
+			for _, mixin := range splitTypeList(match[3]) {
+				item.Mixins = append(item.Mixins, cleanTypeName(mixin))
+			}
+		}
+		if len(match) > 4 {
+			for _, impl := range splitTypeList(match[4]) {
+				item.Implements = append(item.Implements, cleanTypeName(impl))
+			}
+		}
+		types = append(types, item)
+	}
+	return types
+}
+
+func parseDartFunctionSignatures(content string) []models.FunctionSignature {
+	var funcs []models.FunctionSignature
+	previousOverride := false
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if line == "@override" {
+			previousOverride = true
+			continue
+		}
+		if strings.HasPrefix(line, "@") {
+			continue
+		}
+		match := dartSigRe.FindStringSubmatch(line)
+		if len(match) < 4 || match[2] == "" || startsUpper(match[2]) {
+			previousOverride = false
+			continue
+		}
+		funcs = append(funcs, models.FunctionSignature{
+			Name:       match[2],
+			ReturnType: strings.TrimSpace(match[1]),
+			Params:     parseDartParams(match[3]),
+			Signature:  signatureUntilBody(line),
+			IsMethod:   true,
+			IsAsync:    strings.Contains(line, " async"),
+			IsOverride: previousOverride,
+		})
+		previousOverride = false
+	}
+	return dedupFunctionSignatures(funcs)
 }
 
 func parseDartClasses(content string) ([]string, []string, []string) {
@@ -192,12 +263,44 @@ func parseGoTypes(content string) []string {
 func parseGoFuncs(content string) []string {
 	var funcs []string
 	for _, match := range goFuncRe.FindAllStringSubmatch(content, -1) {
-		if len(match) < 2 || match[1] == "" {
+		if len(match) < 3 || match[2] == "" {
 			continue
 		}
-		funcs = append(funcs, match[1])
+		funcs = append(funcs, match[2])
 	}
 	return dedup(funcs)
+}
+
+func parseGoTypeAnatomy(content string) []models.TypeAnatomy {
+	var types []models.TypeAnatomy
+	for _, match := range goTypeRe.FindAllStringSubmatch(content, -1) {
+		if len(match) < 3 || match[1] == "" {
+			continue
+		}
+		types = append(types, models.TypeAnatomy{
+			Name: match[1],
+			Kind: match[2],
+		})
+	}
+	return types
+}
+
+func parseGoFunctionSignatures(content string) []models.FunctionSignature {
+	var funcs []models.FunctionSignature
+	for _, match := range goFuncRe.FindAllStringSubmatch(content, -1) {
+		if len(match) < 5 || match[2] == "" {
+			continue
+		}
+		funcs = append(funcs, models.FunctionSignature{
+			Name:      match[2],
+			Receiver:  strings.TrimSpace(match[1]),
+			Params:    parseGoParams(match[3]),
+			Returns:   strings.TrimSpace(match[4]),
+			Signature: strings.TrimSpace(match[0]),
+			IsMethod:  strings.TrimSpace(match[1]) != "",
+		})
+	}
+	return dedupFunctionSignatures(funcs)
 }
 
 func parseDependencyTypes(content string) []string {
@@ -213,6 +316,103 @@ func parseDependencyTypes(content string) []string {
 		}
 	}
 	return dedup(deps)
+}
+
+func parseDartParams(raw string) []models.Parameter {
+	raw = strings.TrimSpace(strings.Trim(raw, "{}[]"))
+	if raw == "" {
+		return nil
+	}
+	var params []models.Parameter
+	for _, part := range splitTopLevel(raw, ',') {
+		part = strings.TrimSpace(strings.Trim(part, "{}[]"))
+		if part == "" {
+			continue
+		}
+		fields := strings.Fields(part)
+		if len(fields) == 1 {
+			params = append(params, models.Parameter{Name: strings.Trim(fields[0], ",")})
+			continue
+		}
+		name := strings.Trim(fields[len(fields)-1], ",")
+		typ := strings.Join(fields[:len(fields)-1], " ")
+		params = append(params, models.Parameter{Name: name, Type: typ})
+	}
+	return params
+}
+
+func parseGoParams(raw string) []models.Parameter {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var params []models.Parameter
+	for _, part := range splitTopLevel(raw, ',') {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		fields := strings.Fields(part)
+		if len(fields) == 1 {
+			params = append(params, models.Parameter{Type: fields[0]})
+			continue
+		}
+		typ := fields[len(fields)-1]
+		for _, name := range strings.Split(strings.Join(fields[:len(fields)-1], " "), ",") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				params = append(params, models.Parameter{Name: name, Type: typ})
+			}
+		}
+	}
+	return params
+}
+
+func splitTopLevel(raw string, sep rune) []string {
+	var parts []string
+	depth := 0
+	start := 0
+	for i, r := range raw {
+		switch r {
+		case '<', '(', '[', '{':
+			depth++
+		case '>', ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if r == sep && depth == 0 {
+				parts = append(parts, raw[start:i])
+				start = i + len(string(r))
+			}
+		}
+	}
+	parts = append(parts, raw[start:])
+	return parts
+}
+
+func signatureUntilBody(line string) string {
+	line = strings.TrimSpace(line)
+	for _, marker := range []string{"{", "=>", ";"} {
+		if idx := strings.Index(line, marker); idx >= 0 {
+			return strings.TrimSpace(line[:idx])
+		}
+	}
+	return line
+}
+
+func dedupFunctionSignatures(items []models.FunctionSignature) []models.FunctionSignature {
+	seen := map[string]bool{}
+	var out []models.FunctionSignature
+	for _, item := range items {
+		key := item.Receiver + "|" + item.Name + "|" + item.Signature
+		if item.Name == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, item)
+	}
+	return out
 }
 
 func detectCapabilities(path, content string) []string {

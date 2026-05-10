@@ -4,24 +4,24 @@ import 'package:flutter_test/flutter_test.dart';
 // import 'package:bloc_test/bloc_test.dart';
 
 // TODO: Update import path to match your project structure
-// import 'package:your_package_name/features/{{.SnakeName}}/presentation/{{.SnakeName}}_bloc.dart';
+// import 'package:your_package_name/features/{{.SnakeName}}/presentation/{{.File "bloc"}}';
 
 void main() {
-  group('{{.PascalName}}{{index .Suffixes "bloc"}}', () {
-    // TODO: Initialize {{.CamelName}}Bloc
-    // late {{.PascalName}}{{index .Suffixes "bloc"}} {{.CamelName}}Bloc;
+  group('{{.Class "bloc"}}', () {
+    // TODO: Initialize {{.Var "bloc"}}
+    // late {{.Class "bloc"}} {{.Var "bloc"}};
 
     // TODO: Add setUp to instantiate the bloc
 
     // TODO: Implement bloc state tests
     /*
     test('initial state is {{.PascalName}}Initial', () {
-      expect({{.CamelName}}Bloc.state, isA<{{.PascalName}}Initial>());
+      expect({{.Var "bloc"}}.state, isA<{{.PascalName}}Initial>());
     });
 
-    blocTest<{{.PascalName}}{{index .Suffixes "bloc"}}, {{.PascalName}}{{index .Suffixes "state"}}>(
+    blocTest<{{.Class "bloc"}}, {{.Class "state"}}>(
       'emits [Loading, Loaded] when {{.PascalName}}Started is added',
-      build: () => {{.CamelName}}Bloc,
+      build: () => {{.Var "bloc"}},
       act: (bloc) => bloc.add(const {{.PascalName}}Started()),
       expect: () => [
         isA<{{.PascalName}}Loading>(),

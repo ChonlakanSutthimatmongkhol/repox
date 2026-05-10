@@ -1,12 +1,12 @@
-import '{{index .Imports "repository"}}';
-import '{{index .Imports "request"}}';
-import '{{index .Imports "response"}}';
+import '{{.Import "repository"}}';
+import '{{.Import "request"}}';
+import '{{.Import "response"}}';
 
-class {{.PascalName}}{{index .Suffixes "repository"}}Impl implements {{.PascalName}}{{index .Suffixes "repository"}} {
-  const {{.PascalName}}{{index .Suffixes "repository"}}Impl();
+class {{.Class "repository_impl"}} implements {{.Class "repository"}} {
+  const {{.Class "repository_impl"}}();
 
   @override
-  Future<{{.PascalName}}Response> fetch({{.PascalName}}Request request) async {
+  Future<{{.Class "response"}}> fetch({{.Class "request"}} request) async {
     // TODO: implement
     throw UnimplementedError();
   }
