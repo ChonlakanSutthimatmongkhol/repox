@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -18,6 +19,7 @@ import (
 var (
 	scanProjectOverride string
 	scanDeep            bool
+	scanFeatureRoot     string
 )
 
 var scanCmd = &cobra.Command{
@@ -30,6 +32,7 @@ var scanCmd = &cobra.Command{
 func init() {
 	scanCmd.Flags().StringVar(&scanProjectOverride, "project", "", "Override project type detection (flutter, go, node)")
 	scanCmd.Flags().BoolVar(&scanDeep, "deep", true, "Scan file contents for imports")
+	scanCmd.Flags().StringVar(&scanFeatureRoot, "feature-root", "", "Override feature root path (e.g. internal/customer)")
 	rootCmd.AddCommand(scanCmd)
 }
 
@@ -66,6 +69,12 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	conv, err := s.Scan(cwd)
 	if err != nil {
 		return fmt.Errorf("scan: %w", err)
+	}
+
+	if strings.TrimSpace(scanFeatureRoot) != "" {
+		if err := applyFeatureRootOverride(conv, cwd, scanFeatureRoot); err != nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "Warning: --feature-root override failed: %v\n", err)
+		}
 	}
 
 	return saveScanResult(cmd, conv)
@@ -253,4 +262,42 @@ func anatomyVoteNames(votes []models.AnatomyVote, limit int) []string {
 		names = append(names, votes[i].Name)
 	}
 	return names
+}
+
+// applyFeatureRootOverride restricts the scanned features to only those under
+// featureRoot. If featureRoot points to a single feature folder (e.g. internal/customer),
+// it uses the parent as the scan root and filters to matching features only.
+func applyFeatureRootOverride(conv *models.Convention, rootDir, featureRoot string) error {
+	// Try featureRoot directly as a container of features.
+	analysis, err := scanner.AnalyzeFeatureRoot(rootDir, featureRoot, conv.Naming)
+	if err != nil || len(analysis.Features) == 0 {
+		// Fallback: treat featureRoot as a single feature — scan its parent and filter.
+		parent := filepath.Dir(featureRoot)
+		if parent == "." {
+			parent = featureRoot
+		}
+		analysis, err = scanner.AnalyzeFeatureRoot(rootDir, parent, conv.Naming)
+		if err != nil {
+			return err
+		}
+		// Keep only features whose path starts with featureRoot.
+		var filtered []models.FeatureAnalysis
+		for _, f := range analysis.Features {
+			if f.Path == featureRoot || strings.HasPrefix(f.Path, featureRoot+"/") {
+				filtered = append(filtered, f)
+			}
+		}
+		if len(filtered) == 0 {
+			return fmt.Errorf("no features found under %q", featureRoot)
+		}
+		analysis.Features = filtered
+	}
+
+	conv.FeatureRoot = featureRoot
+	conv.FeaturesAnalysis = analysis
+	if analysis.RecommendedPattern != "" {
+		conv.FeatureStructure = analysis.RecommendedPattern
+	}
+	conv.PatternMappings = scanner.InferPatternMappings(analysis.Features, conv.PatternMappings)
+	return nil
 }
