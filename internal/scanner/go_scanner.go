@@ -33,7 +33,13 @@ func (s *GoScanner) Scan(rootDir string) (*models.Convention, error) {
 	}
 	conv.FeatureRoot = featureRoot
 
-	featuresAnalysis, err := AnalyzeFeatureRoot(rootDir, featureRoot)
+	naming, err := DetectNamingConventions(filepath.Join(rootDir, featureRoot), "go")
+	if err != nil {
+		return nil, fmt.Errorf("go_scanner: detect naming: %w", err)
+	}
+	conv.Naming = naming
+
+	featuresAnalysis, err := AnalyzeFeatureRoot(rootDir, featureRoot, naming)
 	if err != nil {
 		return nil, fmt.Errorf("go_scanner: analyze features: %w", err)
 	}
@@ -50,12 +56,6 @@ func (s *GoScanner) Scan(rootDir string) (*models.Convention, error) {
 
 	// Go tests live alongside source files; use same root.
 	conv.TestRoot = featureRoot
-
-	naming, err := DetectNamingConventions(filepath.Join(rootDir, featureRoot), "go")
-	if err != nil {
-		return nil, fmt.Errorf("go_scanner: detect naming: %w", err)
-	}
-	conv.Naming = naming
 
 	imports, err := DetectCommonImports(filepath.Join(rootDir, featureRoot), "go")
 	if err != nil {

@@ -15,7 +15,11 @@ var knownFeaturePatterns = []string{"flat", "grouped", "clean_architecture"}
 
 // AnalyzeFeatureRoot enumerates every feature folder under featureRoot and
 // analyzes the structure pattern used by each feature.
-func AnalyzeFeatureRoot(rootDir, featureRoot string) (models.FeaturesAnalysis, error) {
+func AnalyzeFeatureRoot(rootDir, featureRoot string, naming ...models.NamingConvention) (models.FeaturesAnalysis, error) {
+	n := models.NamingConvention{}
+	if len(naming) > 0 {
+		n = naming[0]
+	}
 	analysis := models.FeaturesAnalysis{
 		Features:            []models.FeatureAnalysis{},
 		PatternDistribution: emptyPatternDistribution(),
@@ -35,7 +39,7 @@ func AnalyzeFeatureRoot(rootDir, featureRoot string) (models.FeaturesAnalysis, e
 		return analysis, nil
 	}
 
-	features, latestFeature := discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot)
+	features, latestFeature := discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot, n)
 	for _, feature := range features {
 		analysis.Features = append(analysis.Features, feature)
 		counts[feature.Structure]++
@@ -142,7 +146,7 @@ func DetectFeaturePattern(featurePath string) string {
 	return "flat"
 }
 
-func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string) ([]models.FeatureAnalysis, models.FeatureAnalysis) {
+func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string, naming models.NamingConvention) ([]models.FeatureAnalysis, models.FeatureAnalysis) {
 	var features []models.FeatureAnalysis
 	var latestFeature models.FeatureAnalysis
 	var latestTime time.Time
@@ -161,7 +165,7 @@ func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string) ([]mo
 		if isFeatureInternalDir(name) {
 			return filepath.SkipDir
 		}
-		if !isFeatureUnit(path) {
+		if !isFeatureUnit(path, naming) {
 			return nil
 		}
 
@@ -175,7 +179,7 @@ func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string) ([]mo
 		if parent == "." {
 			parent = ""
 		}
-		files, routes := collectFeatureFiles(rootDir, path)
+		files, routes := collectFeatureFiles(rootDir, path, naming)
 		if len(files) == 0 {
 			return nil
 		}
@@ -205,20 +209,20 @@ func discoverFeatureAnalyses(rootDir, featureRootPath, featureRoot string) ([]mo
 	return features, latestFeature
 }
 
-func isFeatureUnit(path string) bool {
+func isFeatureUnit(path string, naming models.NamingConvention) bool {
 	if isFeatureInternalDir(filepath.Base(path)) {
 		return false
 	}
 	if DetectFeaturePattern(path) != "flat" {
 		return true
 	}
-	if hasFeatureRoleFilesUnderInternalDirs(path) {
+	if hasFeatureRoleFilesUnderInternalDirs(path, naming) {
 		return true
 	}
-	return hasImmediateFeatureRoleFile(path)
+	return hasImmediateFeatureRoleFile(path, naming)
 }
 
-func hasImmediateFeatureRoleFile(path string) bool {
+func hasImmediateFeatureRoleFile(path string, naming models.NamingConvention) bool {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return false
@@ -227,14 +231,14 @@ func hasImmediateFeatureRoleFile(path string) bool {
 		if entry.IsDir() {
 			continue
 		}
-		if roleForFeatureFile(entry.Name()) != "" {
+		if roleForFeatureFile(entry.Name(), naming) != "" {
 			return true
 		}
 	}
 	return false
 }
 
-func hasFeatureRoleFilesUnderInternalDirs(path string) bool {
+func hasFeatureRoleFilesUnderInternalDirs(path string, naming models.NamingConvention) bool {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return false
@@ -254,7 +258,7 @@ func hasFeatureRoleFilesUnderInternalDirs(path string) bool {
 				}
 				return nil
 			}
-			if roleForFeatureFile(d.Name()) != "" {
+			if roleForFeatureFile(d.Name(), naming) != "" {
 				found = true
 				return filepath.SkipAll
 			}
@@ -274,7 +278,7 @@ type featureFileCandidate struct {
 	depth int
 }
 
-func collectFeatureFiles(rootDir, featureDir string) (map[string]string, map[string]string) {
+func collectFeatureFiles(rootDir, featureDir string, naming models.NamingConvention) (map[string]string, map[string]string) {
 	var candidates []featureFileCandidate
 
 	_ = filepath.WalkDir(featureDir, func(path string, d os.DirEntry, err error) error {
@@ -285,7 +289,7 @@ func collectFeatureFiles(rootDir, featureDir string) (map[string]string, map[str
 			if path != featureDir && (excludedDirs[d.Name()] || strings.HasPrefix(d.Name(), ".")) {
 				return filepath.SkipDir
 			}
-			if path != featureDir && !isFeatureInternalDir(d.Name()) && isFeatureUnit(path) {
+			if path != featureDir && !isFeatureInternalDir(d.Name()) && isFeatureUnit(path, naming) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -293,7 +297,7 @@ func collectFeatureFiles(rootDir, featureDir string) (map[string]string, map[str
 		if isGeneratedSourceFile(path) {
 			return nil
 		}
-		role := roleForFeaturePath(featureDir, path)
+		role := roleForFeaturePath(featureDir, path, naming)
 		if role == "" {
 			return nil
 		}
@@ -342,8 +346,8 @@ func isGeneratedSourceFile(path string) bool {
 		strings.HasSuffix(base, ".generated.dart")
 }
 
-func roleForFeaturePath(featureDir, path string) string {
-	if role := roleForFeatureFile(filepath.Base(path)); role != "" {
+func roleForFeaturePath(featureDir, path string, naming models.NamingConvention) string {
+	if role := roleForFeatureFile(filepath.Base(path), naming); role != "" {
 		return role
 	}
 	ext := filepath.Ext(path)
@@ -380,11 +384,60 @@ func uniqueFeatureRole(role, route string, files map[string]string) string {
 	}
 }
 
-func roleForFeatureFile(filename string) string {
-	base := strings.TrimSuffix(filename, filepath.Ext(filename))
-	if filepath.Ext(filename) != ".dart" && filepath.Ext(filename) != ".go" {
+// roleForFeatureFile maps a filename to a repox role using scanned naming conventions.
+// When naming has been detected (non-zero), only scanned suffixes are used.
+// When naming is zero (bootstrap phase, before naming is detected), it falls back
+// to the same candidate patterns used by the naming scanner for discovery.
+func roleForFeatureFile(filename string, naming models.NamingConvention) string {
+	ext := filepath.Ext(filename)
+	if ext != ".dart" && ext != ".go" {
 		return ""
 	}
+	base := strings.TrimSuffix(filename, ext)
+	check := func(suffix, role string) string {
+		if suffix == "" {
+			return ""
+		}
+		if strings.HasSuffix(base, "_"+strings.ToLower(suffix)) {
+			return role
+		}
+		return ""
+	}
+
+	if naming != (models.NamingConvention{}) {
+		// Naming detected — use only what the scanner found, no guessing.
+		if r := check(naming.RepositorySuffix+"Impl", "repository_impl"); r != "" {
+			return r
+		}
+		if r := check(naming.ScreenSuffix, "screen"); r != "" {
+			return r
+		}
+		if r := check(naming.BlocSuffix, "bloc"); r != "" {
+			return r
+		}
+		if r := check(naming.EventSuffix, "event"); r != "" {
+			return r
+		}
+		if r := check(naming.StateSuffix, "state"); r != "" {
+			return r
+		}
+		if r := check(naming.RepositorySuffix, "repository"); r != "" {
+			return r
+		}
+		if r := check(naming.UsecaseSuffix, "usecase"); r != "" {
+			return r
+		}
+		if r := check(naming.HandlerSuffix, "handler"); r != "" {
+			return r
+		}
+		if r := check(naming.ServiceSuffix, "service"); r != "" {
+			return r
+		}
+		return ""
+	}
+
+	// Bootstrap fallback — same candidates the naming scanner votes on.
+	// Used only during the initial scan pass before naming is available.
 	switch {
 	case strings.HasSuffix(base, "_repository_impl"):
 		return "repository_impl"
@@ -400,7 +453,7 @@ func roleForFeatureFile(filename string) string {
 		return "repository"
 	case strings.HasSuffix(base, "_usecase"), strings.HasSuffix(base, "_use_case"):
 		return "usecase"
-	case strings.HasSuffix(base, "_request"), strings.HasSuffix(base, "_request_model"), strings.HasSuffix(base, "_request_body"):
+	case strings.HasSuffix(base, "_request"), strings.HasSuffix(base, "_request_model"):
 		return "request"
 	case strings.HasSuffix(base, "_response"), strings.HasSuffix(base, "_response_model"):
 		return "response"

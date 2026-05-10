@@ -29,7 +29,16 @@ func (s *FlutterScanner) Scan(rootDir string) (*models.Convention, error) {
 		return nil, fmt.Errorf("flutter_scanner: detect structure: %w", err)
 	}
 	conv.FeatureStructure = structure
-	featuresAnalysis, err := AnalyzeFeatureRoot(rootDir, featureRoot)
+
+	// Detect naming BEFORE analyzing features so roleForFeatureFile uses
+	// scanned suffixes instead of hardcoded bootstrap patterns.
+	naming, err := DetectNamingConventions(rootDir+"/"+featureRoot, "flutter")
+	if err != nil {
+		return nil, fmt.Errorf("flutter_scanner: detect naming: %w", err)
+	}
+	conv.Naming = naming
+
+	featuresAnalysis, err := AnalyzeFeatureRoot(rootDir, featureRoot, naming)
 	if err != nil {
 		return nil, fmt.Errorf("flutter_scanner: analyze features: %w", err)
 	}
@@ -46,12 +55,6 @@ func (s *FlutterScanner) Scan(rootDir string) (*models.Convention, error) {
 		testRoot = "test"
 	}
 	conv.TestRoot = testRoot
-
-	naming, err := DetectNamingConventions(rootDir+"/"+featureRoot, "flutter")
-	if err != nil {
-		return nil, fmt.Errorf("flutter_scanner: detect naming: %w", err)
-	}
-	conv.Naming = naming
 
 	imports, err := DetectCommonImports(rootDir+"/"+featureRoot, "flutter")
 	if err != nil {
