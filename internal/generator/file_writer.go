@@ -19,7 +19,13 @@ func WriteFiles(files []GeneratedFile, baseDir string, force bool) ([]WriteResul
 	results := make([]WriteResult, 0, len(files))
 
 	for _, f := range files {
-		dest := filepath.Join(baseDir, f.Path)
+		path := f.Path
+		if filepath.IsAbs(path) {
+			if rel, err := filepath.Rel(baseDir, path); err == nil {
+				path = rel
+			}
+		}
+		dest := filepath.Join(baseDir, path)
 
 		if !force {
 			if _, err := os.Stat(dest); err == nil {
@@ -40,7 +46,7 @@ func WriteFiles(files []GeneratedFile, baseDir string, force bool) ([]WriteResul
 			return results, fmt.Errorf("file_writer: write %s: %w", dest, err)
 		}
 
-		results = append(results, WriteResult{Path: dest, Written: true})
+		results = append(results, WriteResult{Path: path, Written: true})
 	}
 	return results, nil
 }

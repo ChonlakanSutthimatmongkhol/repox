@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
 )
 
 var flutterFeatureRootCandidates = []string{
@@ -86,7 +88,13 @@ func countFeatureFolders(featureRoot string) int {
 	}
 	count := 0
 	for _, entry := range entries {
-		if entry.IsDir() && !excludedDirs[entry.Name()] {
+		if !entry.IsDir() || excludedDirs[entry.Name()] {
+			continue
+		}
+		// Only count directories that look like features (have role files or
+		// internal sub-packages like handler/, service/, repository/).
+		// Using empty naming → bootstrap pattern detection.
+		if isFeatureUnit(filepath.Join(featureRoot, entry.Name()), models.NamingConvention{}) {
 			count++
 		}
 	}

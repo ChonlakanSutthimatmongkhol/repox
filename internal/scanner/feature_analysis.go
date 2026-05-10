@@ -140,7 +140,13 @@ func DetectFeaturePattern(featurePath string) string {
 	if dirs["presentation"] && (dirs["domain"] || dirs["data"]) {
 		return "clean_architecture"
 	}
-	if dirs["presentation"] || dirs["bloc"] || dirs["screen"] || dirs["screens"] || dirs["repository"] || dirs["repositories"] {
+	if dirs["presentation"] || dirs["bloc"] || dirs["screen"] || dirs["screens"] ||
+		dirs["repository"] || dirs["repositories"] ||
+		dirs["handler"] || dirs["handlers"] ||
+		dirs["controller"] || dirs["controllers"] ||
+		dirs["service"] || dirs["services"] ||
+		dirs["usecase"] || dirs["usecases"] ||
+		dirs["delivery"] {
 		return "grouped"
 	}
 	return "flat"
