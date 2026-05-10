@@ -6,25 +6,25 @@ import '{{.}}';
 
 {{- with index .Imports "bloc"}}import '{{.}}';{{end}}
 
-class {{.PascalName}}{{.ScreenSuffix}} extends {{if .ScreenBaseClass}}{{.ScreenBaseClass}}{{else}}StatefulWidget{{end}} {
-  const {{.PascalName}}{{.ScreenSuffix}}({super.key});
+class {{.PascalName}}{{index .Suffixes "screen"}} extends {{if .ScreenBaseClass}}{{.ScreenBaseClass}}{{else}}StatefulWidget{{end}} {
+  const {{.PascalName}}{{index .Suffixes "screen"}}({super.key});
 
   @override
-  {{if .ScreenStateBase}}{{.ScreenStateBase}}<{{.PascalName}}{{.ScreenSuffix}}>{{else}}State<{{.PascalName}}{{.ScreenSuffix}}>{{end}} createState() => _{{.PascalName}}{{.ScreenSuffix}}State();
+  {{if .ScreenStateBase}}{{.ScreenStateBase}}<{{.PascalName}}{{index .Suffixes "screen"}}>{{else}}State<{{.PascalName}}{{index .Suffixes "screen"}}>{{end}} createState() => _{{.PascalName}}{{index .Suffixes "screen"}}State();
 }
 
-class _{{.PascalName}}{{.ScreenSuffix}}State extends {{if .ScreenStateBase}}{{.ScreenStateBase}}<{{.PascalName}}{{.ScreenSuffix}}>{{else}}State<{{.PascalName}}{{.ScreenSuffix}}>{{end}} {
+class _{{.PascalName}}{{index .Suffixes "screen"}}State extends {{if .ScreenStateBase}}{{.ScreenStateBase}}<{{.PascalName}}{{index .Suffixes "screen"}}>{{else}}State<{{.PascalName}}{{index .Suffixes "screen"}}>{{end}} {
   @override
   void initState() {
     super.initState();
-    context.read<{{.PascalName}}{{.BlocSuffix}}>().add(const {{.PascalName}}Started());
+    context.read<{{.PascalName}}{{index .Suffixes "bloc"}}>().add(const {{.PascalName}}Started());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('{{.PascalName}}')),
-      body: BlocBuilder<{{.PascalName}}{{.BlocSuffix}}, {{.PascalName}}{{.StateSuffix}}>(
+      body: BlocBuilder<{{.PascalName}}{{index .Suffixes "bloc"}}, {{.PascalName}}{{index .Suffixes "state"}}>(
         builder: (context, state) {
           return switch (state) {
             {{.PascalName}}Initial() => const SizedBox.shrink(),

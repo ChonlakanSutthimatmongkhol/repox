@@ -7,9 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 // import 'package:your_package_name/features/{{.SnakeName}}/presentation/{{.SnakeName}}_bloc.dart';
 
 void main() {
-  group('{{.PascalName}}{{.BlocSuffix}}', () {
+  group('{{.PascalName}}{{index .Suffixes "bloc"}}', () {
     // TODO: Initialize {{.CamelName}}Bloc
-    // late {{.PascalName}}{{.BlocSuffix}} {{.CamelName}}Bloc;
+    // late {{.PascalName}}{{index .Suffixes "bloc"}} {{.CamelName}}Bloc;
 
     // TODO: Add setUp to instantiate the bloc
 
@@ -19,7 +19,7 @@ void main() {
       expect({{.CamelName}}Bloc.state, isA<{{.PascalName}}Initial>());
     });
 
-    blocTest<{{.PascalName}}{{.BlocSuffix}}, {{.PascalName}}{{.StateSuffix}}>(
+    blocTest<{{.PascalName}}{{index .Suffixes "bloc"}}, {{.PascalName}}{{index .Suffixes "state"}}>(
       'emits [Loading, Loaded] when {{.PascalName}}Started is added',
       build: () => {{.CamelName}}Bloc,
       act: (bloc) => bloc.add(const {{.PascalName}}Started()),

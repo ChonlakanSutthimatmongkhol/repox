@@ -9,16 +9,16 @@ import '{{.}}';
 part '{{.SnakeName}}_event.dart';
 part '{{.SnakeName}}_state.dart';
 
-class {{.PascalName}}{{.BlocSuffix}} extends {{if .BlocBaseClass}}{{.BlocBaseClass}}<{{.PascalName}}{{.EventSuffix}}, {{.PascalName}}{{.StateSuffix}}>{{else}}Bloc<{{.PascalName}}{{.EventSuffix}}, {{.PascalName}}{{.StateSuffix}}>{{end}} {
-  {{.PascalName}}{{.BlocSuffix}}({{with index .Imports "usecase"}}this._{{$.CamelName}}{{$.UsecaseSuffix}}{{end}}) : super(const {{.PascalName}}Initial()) {
+class {{.PascalName}}{{index .Suffixes "bloc"}} extends {{if .BlocBaseClass}}{{.BlocBaseClass}}<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{else}}Bloc<{{.PascalName}}{{index .Suffixes "event"}}, {{.PascalName}}{{index .Suffixes "state"}}>{{end}} {
+  {{.PascalName}}{{index .Suffixes "bloc"}}({{with index .Imports "usecase"}}this._{{$.CamelName}}{{index $.Suffixes "usecase"}}{{end}}) : super(const {{.PascalName}}Initial()) {
     on<{{.PascalName}}Started>(_onStarted);
   }
 {{with index .Imports "usecase"}}
-  final {{$.PascalName}}{{$.UsecaseSuffix}} _{{$.CamelName}}{{$.UsecaseSuffix}};
+  final {{$.PascalName}}{{index $.Suffixes "usecase"}} _{{$.CamelName}}{{index $.Suffixes "usecase"}};
 {{end}}
   Future<void> _onStarted(
     {{.PascalName}}Started event,
-    Emitter<{{.PascalName}}{{.StateSuffix}}> emit,
+    Emitter<{{.PascalName}}{{index .Suffixes "state"}}> emit,
   ) async {
     emit(const {{.PascalName}}Loading());
     // TODO: implement

@@ -25,22 +25,17 @@ func toGoPackageName(featureName string) string {
 
 // TemplateContext holds values passed to every scaffold template.
 type TemplateContext struct {
-	FeatureName      string
-	FeaturePath      string
-	PascalName       string
-	CamelName        string
-	SnakeName        string
-	PackageName      string // Go: lowercase no-separator package name
-	ModulePath       string // Go: module path from go.mod
-	ScreenSuffix     string
-	BlocSuffix       string
-	EventSuffix      string
-	StateSuffix      string
-	RepositorySuffix string
-	UsecaseSuffix    string
-	HandlerSuffix    string // Go
-	ServiceSuffix    string // Go
+	FeatureName string
+	FeaturePath string
+	PascalName  string
+	CamelName   string
+	SnakeName   string
+	PackageName string // Go: lowercase no-separator package name
+	ModulePath  string // Go: module path from go.mod
 	CommonImports []string
+	// Suffixes holds PascalCase class-name suffixes keyed by role name (e.g. "bloc" → "Bloc", "service" → "Service").
+	// Populated dynamically from the scanned SuffixRoles convention — no hardcoded role names.
+	Suffixes map[string]string
 	// Imports holds relative dart import paths keyed by role name (e.g. "bloc", "usecase").
 	// Populated dynamically from the active roles being generated — no hardcoded role names.
 	Imports map[string]string
@@ -704,23 +699,44 @@ func buildContext(featureName string, conv *models.Convention) TemplateContext {
 	featurePath := normalizeFeaturePath(featureName)
 	leafName := filepath.Base(featurePath)
 	return TemplateContext{
-		FeatureName:      featureName,
-		FeaturePath:      featurePath,
-		PascalName:       ToPascalCase(leafName),
-		CamelName:        ToCamelCase(leafName),
-		SnakeName:        ToSnakeCase(leafName),
-		PackageName:      toGoPackageName(leafName),
-		ModulePath:       conv.ModulePath,
-		ScreenSuffix:     conv.Naming.ScreenSuffix,
-		BlocSuffix:       conv.Naming.BlocSuffix,
-		EventSuffix:      conv.Naming.EventSuffix,
-		StateSuffix:      conv.Naming.StateSuffix,
-		RepositorySuffix: conv.Naming.RepositorySuffix,
-		UsecaseSuffix:    conv.Naming.UsecaseSuffix,
-		HandlerSuffix:    conv.Naming.HandlerSuffix,
-		ServiceSuffix:    conv.Naming.ServiceSuffix,
-		CommonImports:    conv.CommonImports,
+		FeatureName:   featureName,
+		FeaturePath:   featurePath,
+		PascalName:    ToPascalCase(leafName),
+		CamelName:     ToCamelCase(leafName),
+		SnakeName:     ToSnakeCase(leafName),
+		PackageName:   toGoPackageName(leafName),
+		ModulePath:    conv.ModulePath,
+		Suffixes:      buildSuffixesMap(conv.Naming),
+		CommonImports: conv.CommonImports,
 	}
+}
+
+// buildSuffixesMap builds a role → PascalCase suffix map from the scanned NamingConvention.
+// Primary source: SuffixRoles (scanner-built, fully dynamic). The snake suffix key converts
+// back to PascalCase to recover the actual class-name suffix (e.g. "use_case" → "UseCase").
+// Falls back to the named fields for projects that haven't been scanned yet.
+func buildSuffixesMap(naming models.NamingConvention) map[string]string {
+	m := map[string]string{}
+	if len(naming.SuffixRoles) > 0 {
+		for snakeSuffix, role := range naming.SuffixRoles {
+			m[role] = ToPascalCase(snakeSuffix)
+		}
+		return m
+	}
+	add := func(role, suffix string) {
+		if suffix != "" {
+			m[role] = suffix
+		}
+	}
+	add("screen", naming.ScreenSuffix)
+	add("bloc", naming.BlocSuffix)
+	add("event", naming.EventSuffix)
+	add("state", naming.StateSuffix)
+	add("repository", naming.RepositorySuffix)
+	add("usecase", naming.UsecaseSuffix)
+	add("handler", naming.HandlerSuffix)
+	add("service", naming.ServiceSuffix)
+	return m
 }
 
 func (ctx TemplateContext) withBaseClassesFrom(like *models.FeatureAnalysis) TemplateContext {

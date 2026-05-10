@@ -2,18 +2,18 @@ package {{.PackageName}}
 
 import "context"
 
-type {{.PascalName}}{{.ServiceSuffix}} interface {
+type {{.PascalName}}{{index .Suffixes "service"}} interface {
 	Get(ctx context.Context, req *{{.PascalName}}Request) (*{{.PascalName}}Response, error)
 }
 
-type {{.PascalName}}{{.ServiceSuffix}}Impl struct {
-	repo {{.PascalName}}{{.RepositorySuffix}}
+type {{.PascalName}}{{index .Suffixes "service"}}Impl struct {
+	repo {{.PascalName}}{{index .Suffixes "repository"}}
 }
 
-func New{{.PascalName}}{{.ServiceSuffix}}(repo {{.PascalName}}{{.RepositorySuffix}}) {{.PascalName}}{{.ServiceSuffix}} {
-	return &{{.PascalName}}{{.ServiceSuffix}}Impl{repo: repo}
+func New{{.PascalName}}{{index .Suffixes "service"}}(repo {{.PascalName}}{{index .Suffixes "repository"}}) {{.PascalName}}{{index .Suffixes "service"}} {
+	return &{{.PascalName}}{{index .Suffixes "service"}}Impl{repo: repo}
 }
 
-func (s *{{.PascalName}}{{.ServiceSuffix}}Impl) Get(ctx context.Context, req *{{.PascalName}}Request) (*{{.PascalName}}Response, error) {
+func (s *{{.PascalName}}{{index .Suffixes "service"}}Impl) Get(ctx context.Context, req *{{.PascalName}}Request) (*{{.PascalName}}Response, error) {
 	return s.repo.FindByID(ctx, req.ID)
 }

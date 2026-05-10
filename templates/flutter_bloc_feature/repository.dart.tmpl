@@ -1,6 +1,6 @@
 import '{{index .Imports "request"}}';
 import '{{index .Imports "response"}}';
 
-abstract class {{.PascalName}}{{.RepositorySuffix}} {
+abstract class {{.PascalName}}{{index .Suffixes "repository"}} {
   Future<{{.PascalName}}Response> fetch({{.PascalName}}Request request);
 }

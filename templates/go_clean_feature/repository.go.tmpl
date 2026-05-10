@@ -2,6 +2,6 @@ package {{.PackageName}}
 
 import "context"
 
-type {{.PascalName}}{{.RepositorySuffix}} interface {
+type {{.PascalName}}{{index .Suffixes "repository"}} interface {
 	FindByID(ctx context.Context, id string) (*{{.PascalName}}Response, error)
 }

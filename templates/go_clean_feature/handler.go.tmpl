@@ -5,15 +5,15 @@ import (
 	"net/http"
 )
 
-type {{.PascalName}}{{.HandlerSuffix}} struct {
-	svc {{.PascalName}}{{.ServiceSuffix}}
+type {{.PascalName}}{{index .Suffixes "handler"}} struct {
+	svc {{.PascalName}}{{index .Suffixes "service"}}
 }
 
-func New{{.PascalName}}{{.HandlerSuffix}}(svc {{.PascalName}}{{.ServiceSuffix}}) *{{.PascalName}}{{.HandlerSuffix}} {
-	return &{{.PascalName}}{{.HandlerSuffix}}{svc: svc}
+func New{{.PascalName}}{{index .Suffixes "handler"}}(svc {{.PascalName}}{{index .Suffixes "service"}}) *{{.PascalName}}{{index .Suffixes "handler"}} {
+	return &{{.PascalName}}{{index .Suffixes "handler"}}{svc: svc}
 }
 
-func (h *{{.PascalName}}{{.HandlerSuffix}}) Get(w http.ResponseWriter, r *http.Request) {
+func (h *{{.PascalName}}{{index .Suffixes "handler"}}) Get(w http.ResponseWriter, r *http.Request) {
 	req := &{{.PascalName}}Request{ID: r.URL.Query().Get("id")}
 	resp, err := h.svc.Get(r.Context(), req)
 	if err != nil {

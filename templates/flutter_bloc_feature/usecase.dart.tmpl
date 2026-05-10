@@ -2,10 +2,10 @@ import '{{index .Imports "repository"}}';
 import '{{index .Imports "request"}}';
 import '{{index .Imports "response"}}';
 
-class {{.PascalName}}{{.UsecaseSuffix}} {
-  const {{.PascalName}}{{.UsecaseSuffix}}(this._repository);
+class {{.PascalName}}{{index .Suffixes "usecase"}} {
+  const {{.PascalName}}{{index .Suffixes "usecase"}}(this._repository);
 
-  final {{.PascalName}}{{.RepositorySuffix}} _repository;
+  final {{.PascalName}}{{index .Suffixes "repository"}} _repository;
 
   Future<{{.PascalName}}Response> call({{.PascalName}}Request request) {
     return _repository.fetch(request);
