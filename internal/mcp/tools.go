@@ -63,3 +63,36 @@ func toolExplainConvention() mcp.Tool {
 		mcp.WithDescription("Explain the detected conventions of the current repository in natural language."),
 	)
 }
+
+func toolSetup() mcp.Tool {
+	return mcp.NewTool("repox_setup",
+		mcp.WithDescription("Idempotently initialize Repox, scan conventions, and generate project skill instructions."),
+	)
+}
+
+func toolDoctor() mcp.Tool {
+	return mcp.NewTool("repox_doctor",
+		mcp.WithDescription("Diagnose whether the current repository is ready to use Repox and return suggested fixes."),
+	)
+}
+
+func toolMap() mcp.Tool {
+	return mcp.NewTool("repox_map",
+		mcp.WithDescription("Generate Repox project/convention maps and return generated file paths."),
+		mcp.WithString("feature",
+			mcp.Description("Optional feature name/path for a focused feature map"),
+		),
+	)
+}
+
+func toolExplain() mcp.Tool {
+	return mcp.NewTool("repox_explain",
+		mcp.WithDescription("Return an AI-friendly convention explanation."),
+		mcp.WithString("feature",
+			mcp.Description("Optional feature name/path to explain"),
+		),
+		mcp.WithString("role",
+			mcp.Description("Optional role to explain"),
+		),
+	)
+}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/output"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/retriever"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/scanner"
 )
@@ -20,6 +21,7 @@ var (
 	scanProjectOverride string
 	scanDeep            bool
 	scanFeatureRoot     string
+	scanAI              bool
 )
 
 var scanCmd = &cobra.Command{
@@ -33,6 +35,7 @@ func init() {
 	scanCmd.Flags().StringVar(&scanProjectOverride, "project", "", "Override project type detection (flutter, go, node)")
 	scanCmd.Flags().BoolVar(&scanDeep, "deep", true, "Scan file contents for imports")
 	scanCmd.Flags().StringVar(&scanFeatureRoot, "feature-root", "", "Override feature root path (e.g. internal/customer)")
+	scanCmd.Flags().BoolVar(&scanAI, "ai", false, "Print compact AI-friendly markdown")
 	rootCmd.AddCommand(scanCmd)
 }
 
@@ -105,13 +108,38 @@ func saveScanResult(cmd *cobra.Command, conv *models.Convention) error {
 		examples, idxErr := retriever.IndexFeatures(cwd, conv)
 		if idxErr == nil && len(examples) > 0 {
 			_ = config.Save(config.RepoxPath("examples.json"), examples)
-			fmt.Fprintf(cmd.OutOrStdout(), "  Indexed %d features\n", len(examples))
+			if !scanAI {
+				fmt.Fprintf(cmd.OutOrStdout(), "  Indexed %d features\n", len(examples))
+			}
 		}
 	}
 
+	if scanAI {
+		fmt.Fprint(cmd.OutOrStdout(), buildScanAI(conv))
+		return nil
+	}
 	printScanSummary(cmd, conv)
 	fmt.Fprintln(cmd.OutOrStdout(), "\nConventions saved to .repox/conventions.json")
 	return nil
+}
+
+func buildScanAI(conv *models.Convention) string {
+	return output.Contract(
+		"Scanned repository conventions.",
+		output.BulletList([]string{
+			"Project type: " + valueOrUnknown(conv.ProjectType),
+			"Feature root: " + valueOrUnknown(conv.FeatureRoot),
+			"State management: " + valueOrUnknown(conv.StateManagement),
+			"Routing: " + valueOrUnknown(conv.Routing.Type),
+		}),
+		output.BulletList([]string{
+			fmt.Sprintf("Features indexed: %d", len(conv.FeaturesAnalysis.Features)),
+			"Recommended pattern: " + recommendedPatternForExplain(*conv),
+		}),
+		output.BulletList(firstFeatureNames(*conv, 5)),
+		[]string{"repox map --ai", "repox explain --ai", "repox generate feature <name> --like <existing> --dry-run"},
+		[]string{"Re-run scan after large refactors."},
+	)
 }
 
 func printScanSummary(cmd *cobra.Command, conv *models.Convention) {

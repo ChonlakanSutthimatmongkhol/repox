@@ -13,9 +13,12 @@ import (
 
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/generator"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/mapgen"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/output"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/retriever"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/scanner"
+	projectskill "github.com/ChonlakanSutthimatmongkhol/repox/internal/skill"
 )
 
 func handleScan(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -349,4 +352,222 @@ func handleExplainConvention(_ context.Context, _ mcp.CallToolRequest) (*mcp.Cal
 	fmt.Fprintf(&b, "\nRouting: %s (%s)\n", conv.Routing.Type, conv.Routing.RouteFile)
 	fmt.Fprintf(&b, "Top imports: %s\n", strings.Join(conv.CommonImports, ", "))
 	return callResult(b.String())
+}
+
+func handleSetup(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := ensureRepoxInit(); err != nil {
+		return callError(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return callError(err)
+	}
+	projectType, err := scanner.DetectProjectType(cwd)
+	if err != nil {
+		return callError(err)
+	}
+	var s scanner.Scanner
+	switch projectType {
+	case "flutter", "dart":
+		s = &scanner.FlutterScanner{}
+	case "go":
+		s = &scanner.GoScanner{}
+	default:
+		return callError(fmt.Errorf("unsupported project type %q", projectType))
+	}
+	conv, err := s.Scan(cwd)
+	if err != nil {
+		return callError(err)
+	}
+	if err := config.Save(config.RepoxPath("conventions.json"), conv); err != nil {
+		return callError(err)
+	}
+	examples, _ := retriever.IndexFeatures(cwd, conv)
+	_ = config.Save(config.RepoxPath("examples.json"), examples)
+	cfg, _ := config.Load[models.Config](config.RepoxPath("config.json"))
+	cfg.ProjectType = conv.ProjectType
+	cfg.FeatureRoot = conv.FeatureRoot
+	cfg.TestRoot = conv.TestRoot
+	cfg.DefaultTemplate = defaultMCPTemplate(conv.ProjectType)
+	_ = config.Save(config.RepoxPath("config.json"), cfg)
+	skillInput := projectskill.Input{Config: cfg, Convention: *conv, Examples: examples}
+	if err := mcpWriteTextFile(config.RepoxPath(filepath.Join("skill", "SKILL.md")), projectskill.BuildProjectSkill(skillInput)); err != nil {
+		return callError(err)
+	}
+	return callResult(output.Contract(
+		"Repox setup complete.",
+		output.BulletList([]string{"Project type: " + conv.ProjectType, "Feature root: " + conv.FeatureRoot}),
+		output.BulletList([]string{fmt.Sprintf("Features indexed: %d", len(examples)), "Generated .repox/skill/SKILL.md"}),
+		output.BulletList(firstMCPFeatures(conv, 5)),
+		[]string{"repox_doctor", "repox_map", "repox_explain"},
+		nil,
+	))
+}
+
+func handleDoctor(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var warnings []string
+	var findings []string
+	if !config.RepoxDirExists() {
+		warnings = append(warnings, ".repox missing. Run repox_setup or repox setup.")
+		return callResult(output.Contract("Repox doctor diagnosis.", "", output.BulletList(findings), "", []string{"repox_setup"}, warnings))
+	}
+	findings = append(findings, ".repox exists")
+	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
+	if err != nil {
+		warnings = append(warnings, "conventions.json missing or unreadable. Run repox_scan.")
+	} else {
+		findings = append(findings, "Project type: "+conv.ProjectType)
+		findings = append(findings, fmt.Sprintf("Features indexed: %d", len(conv.FeaturesAnalysis.Features)))
+	}
+	if _, err := os.Stat(config.RepoxPath(filepath.Join("skill", "SKILL.md"))); err != nil {
+		warnings = append(warnings, "Skill file missing. Run repox_setup or repox skill generate.")
+	}
+	if _, err := os.Stat(config.RepoxPath(filepath.Join("maps", "project.md"))); err != nil {
+		warnings = append(warnings, "Map not generated. Run repox_map or repox map.")
+	}
+	return callResult(output.Contract("Repox doctor diagnosis.", "", output.BulletList(findings), "", []string{"repox_setup", "repox_map", "repox_explain"}, warnings))
+}
+
+func handleMap(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := argsMap(req.Params.Arguments)
+	if !config.RepoxDirExists() {
+		return callError(fmt.Errorf("no .repox/ directory found — run repox_setup first"))
+	}
+	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
+	if err != nil {
+		return callError(fmt.Errorf("run repox_scan first to detect conventions"))
+	}
+	files, err := writeMCPMaps(conv, optionalString(args, "feature"))
+	if err != nil {
+		return callError(err)
+	}
+	return callResult(output.Contract(
+		"Generated Repox project maps.",
+		output.BulletList([]string{"Project type: " + conv.ProjectType, "Feature root: " + conv.FeatureRoot}),
+		output.BulletList([]string{fmt.Sprintf("Features indexed: %d", len(conv.FeaturesAnalysis.Features)), "Generated files:\n" + output.BulletList(files)}),
+		output.BulletList(firstMCPFeatures(&conv, 5)),
+		[]string{"repox_explain", "repox_generate"},
+		[]string{"Run repox_scan if maps look outdated."},
+	))
+}
+
+func handleExplain(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := argsMap(req.Params.Arguments)
+	if !config.RepoxDirExists() {
+		return callError(fmt.Errorf("no .repox/ directory found — run repox_setup first"))
+	}
+	conv, err := config.Load[models.Convention](config.RepoxPath("conventions.json"))
+	if err != nil {
+		return callError(fmt.Errorf("run repox_scan first to detect conventions"))
+	}
+	featureName := optionalString(args, "feature")
+	role := optionalString(args, "role")
+	var warnings []string
+	var findings []string
+	findings = append(findings, fmt.Sprintf("Features indexed: %d", len(conv.FeaturesAnalysis.Features)))
+	if featureName != "" {
+		if feature, ok := mapgen.FindFeature(conv, featureName); ok {
+			findings = append(findings, "Selected feature: "+feature.Path)
+		} else {
+			warnings = append(warnings, "Feature "+featureName+" not found in scanned conventions.")
+		}
+	}
+	if role != "" {
+		if _, ok := conv.FeaturesAnalysis.RoleAnatomy[role]; ok {
+			findings = append(findings, "Selected role: "+role)
+		} else {
+			warnings = append(warnings, "Role "+role+" not found in scanned anatomy.")
+		}
+	}
+	return callResult(output.Contract(
+		"Repox convention explanation.",
+		output.BulletList([]string{
+			"Project type: " + conv.ProjectType,
+			"Feature root: " + conv.FeatureRoot,
+			"State management: " + conv.StateManagement,
+			"Routing: " + conv.Routing.Type,
+		}),
+		output.BulletList(findings),
+		output.BulletList(firstMCPFeatures(&conv, 5)),
+		[]string{"repox_map", "repox_generate"},
+		append(warnings, "Run repox_scan if conventions look outdated."),
+	))
+}
+
+func ensureRepoxInit() error {
+	if err := os.MkdirAll(".repox", 0o755); err != nil {
+		return err
+	}
+	files := map[string]any{
+		"config.json":      config.DefaultConfig(),
+		"conventions.json": config.DefaultConventions(),
+		"examples.json":    []models.Example{},
+		"lessons.json":     []models.Lesson{},
+		"generations.json": []models.Generation{},
+	}
+	for name, value := range files {
+		path := config.RepoxPath(name)
+		if _, err := os.Stat(path); err == nil {
+			continue
+		}
+		if err := config.Save(path, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mcpWriteTextFile(path, content string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func writeMCPMaps(conv models.Convention, feature string) ([]string, error) {
+	maps := []mapgen.GeneratedMap{
+		{Path: config.RepoxPath(filepath.Join("maps", "project.md")), Content: mapgen.GenerateProjectMarkdown(conv)},
+		{Path: config.RepoxPath(filepath.Join("maps", "conventions.md")), Content: mapgen.GenerateConventionsMarkdown(conv)},
+		{Path: config.RepoxPath(filepath.Join("maps", "project-markmap.md")), Content: mapgen.GenerateProjectMarkmap(conv)},
+	}
+	if feature != "" {
+		if name, content, ok := mapgen.GenerateFeatureMarkdown(conv, feature); ok {
+			maps = append(maps, mapgen.GeneratedMap{Path: config.RepoxPath(filepath.Join("maps", "features", name+".md")), Content: content})
+		} else {
+			return nil, fmt.Errorf("feature %q not found in scanned conventions", feature)
+		}
+		if name, content, ok := mapgen.GenerateFeatureMarkmap(conv, feature); ok {
+			maps = append(maps, mapgen.GeneratedMap{Path: config.RepoxPath(filepath.Join("maps", "features", name+"-markmap.md")), Content: content})
+		}
+	}
+	var files []string
+	for _, item := range maps {
+		if err := mcpWriteTextFile(item.Path, item.Content); err != nil {
+			return nil, err
+		}
+		files = append(files, item.Path)
+	}
+	return files, nil
+}
+
+func firstMCPFeatures(conv *models.Convention, limit int) []string {
+	features := append([]models.FeatureAnalysis(nil), conv.FeaturesAnalysis.Features...)
+	sort.Slice(features, func(i, j int) bool { return features[i].Path < features[j].Path })
+	if len(features) < limit {
+		limit = len(features)
+	}
+	items := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		items = append(items, features[i].Path)
+	}
+	return items
+}
+
+func defaultMCPTemplate(projectType string) string {
+	switch projectType {
+	case "go":
+		return "go_clean_feature"
+	default:
+		return "flutter_bloc_feature"
+	}
 }

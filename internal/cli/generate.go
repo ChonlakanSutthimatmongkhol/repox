@@ -16,6 +16,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/conventions"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/generator"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/output"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/retriever"
 )
 
@@ -27,6 +28,8 @@ var (
 	generateWithExamples bool
 	generateRoles        string
 	generateLike         string
+	generatePreview      bool
+	generateAI           bool
 )
 
 var generateCmd = &cobra.Command{
@@ -44,11 +47,13 @@ var generateFeatureCmd = &cobra.Command{
 func init() {
 	generateFeatureCmd.Flags().BoolVarP(&generateForce, "force", "f", false, "Overwrite existing files")
 	generateFeatureCmd.Flags().BoolVar(&generateDryRun, "dry-run", false, "Preview files without writing")
+	generateFeatureCmd.Flags().BoolVar(&generatePreview, "preview", false, "Alias for --dry-run")
 	generateFeatureCmd.Flags().StringVarP(&generateTemplate, "template", "t", "", "Template to use (overrides config)")
 	generateFeatureCmd.Flags().StringVar(&generatePattern, "pattern", "", "Feature pattern to use (flat, grouped, clean_architecture)")
 	generateFeatureCmd.Flags().BoolVar(&generateWithExamples, "with-examples", false, "Find and show similar existing features before generating")
 	generateFeatureCmd.Flags().StringVar(&generateRoles, "roles", "", "Comma-separated file roles to generate (e.g. bloc,event,state,screen)")
 	generateFeatureCmd.Flags().StringVar(&generateLike, "like", "", "Use an existing feature path/name as the shape reference")
+	generateFeatureCmd.Flags().BoolVar(&generateAI, "ai", false, "Print compact AI-friendly markdown for dry runs")
 	generateCmd.AddCommand(generateFeatureCmd)
 	rootCmd.AddCommand(generateCmd)
 }
@@ -59,6 +64,7 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	}
 
 	featureName := args[0]
+	dryRun := generateDryRun || generatePreview
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -98,19 +104,15 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// --with-examples: show similar features found
-	if generateWithExamples {
+	// Show similar features when requested, or as non-blocking guidance when --like is missing.
+	if generateWithExamples || (strings.TrimSpace(generateLike) == "" && !(dryRun && generateAI)) {
 		examples, err := config.Load[[]models.Example](config.RepoxPath("examples.json"))
 		if err != nil || len(examples) == 0 {
 			examples, _ = retriever.IndexFeatures(cwd, &conv)
 		}
 		similar := retriever.FindSimilar(featureName, examples, 3)
 		if len(similar) > 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "Similar features found:")
-			for _, ex := range similar {
-				fmt.Fprintf(cmd.OutOrStdout(), "  - %s (%s)\n", ex.Name, ex.Path)
-			}
-			fmt.Fprintln(cmd.OutOrStdout())
+			printSimilarFeatureSuggestion(cmd, featureName, similar)
 		}
 	}
 
@@ -130,7 +132,11 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generate: %w", err)
 	}
 
-	if generateDryRun {
+	if dryRun {
+		if generateAI {
+			fmt.Fprint(cmd.OutOrStdout(), buildGenerateDryRunAI(featureName, generateLike, conv, files))
+			return nil
+		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Dry run — no files written:")
 		for _, f := range files {
 			fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", f.Path)
@@ -160,7 +166,7 @@ func runGenerateFeature(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "\n%d created, %d skipped\n", written, skipped)
 
-	if written > 0 && !generateDryRun {
+	if written > 0 && !dryRun {
 		printChecklist(cmd, featureName, files, &conv)
 	}
 
@@ -387,6 +393,53 @@ func featurePathWithoutRootForCLI(featureRoot, path string) string {
 		return strings.TrimPrefix(path, featureRoot+"/")
 	}
 	return path
+}
+
+func printSimilarFeatureSuggestion(cmd *cobra.Command, featureName string, similar []models.Example) {
+	fmt.Fprintln(cmd.OutOrStdout(), "Similar features found:")
+	for i, ex := range similar {
+		fmt.Fprintf(cmd.OutOrStdout(), "%d. %s\n", i+1, ex.Name)
+	}
+	fmt.Fprintln(cmd.OutOrStdout())
+	fmt.Fprintln(cmd.OutOrStdout(), "Recommended:")
+	fmt.Fprintf(cmd.OutOrStdout(), "  repox generate feature %s --like %s --dry-run\n", featureName, similar[0].Name)
+	fmt.Fprintln(cmd.OutOrStdout())
+}
+
+func buildGenerateDryRunAI(featureName, like string, conv models.Convention, files []generator.GeneratedFile) string {
+	paths := make([]string, 0, len(files))
+	for _, file := range files {
+		paths = append(paths, file.Path)
+	}
+	warnings := []string{"Review generated paths before writing files."}
+	if strings.TrimSpace(like) == "" {
+		warnings = append(warnings, "No --like provided. Prefer using a similar existing feature.")
+	}
+	return output.Contract(
+		fmt.Sprintf("Dry run for feature `%s`.", featureName),
+		output.BulletList([]string{
+			"Source example: " + valueOrNone(like),
+			"Pattern: " + valueOrUnknown(conv.FeatureStructure),
+		}),
+		"Files to create:\n"+output.BulletList(paths),
+		output.BulletList(firstFeatureNames(conv, 5)),
+		[]string{"repox generate feature " + featureName + likeCommandPart(like), "repox map --feature " + featureName + " --ai"},
+		warnings,
+	)
+}
+
+func valueOrNone(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "none"
+	}
+	return value
+}
+
+func likeCommandPart(like string) string {
+	if strings.TrimSpace(like) == "" {
+		return ""
+	}
+	return " --like " + like
 }
 
 // saveSnapshot copies generated file contents to .repox/snapshots/<genID>/ for later diff.

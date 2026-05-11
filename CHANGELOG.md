@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## Unreleased
+
+### Added
+
+- New UX commands: `repox setup`, `repox doctor`, `repox explain`, `repox map`, `repox new feature`, and `repox template`.
+- AI-friendly markdown output for `scan --ai`, `plan feature --ai`, `generate feature --dry-run --ai`, `explain --ai`, and `map --ai`.
+- Markdown/Markmap project maps under `.repox/maps/`, with optional HTML rendering when Markmap is installed.
+- MCP tools for setup, doctor, map, and explain workflows.
+- First-pass template extraction from indexed existing features.
+
+### Changed
+
+- `repox generate feature` now suggests similar indexed features when `--like` is missing.
+- `--preview` is available as an alias for `--dry-run`.
+- README quick start now follows the Scan, Map, Generate workflow.
+
+---
+
 ## [1.0.3] — 2026-05-10
 
 ### Added

@@ -12,34 +12,34 @@
 
 ## 🎯 What is Repox?
 
-Repox scans your codebase, learns your project's conventions, generates project-specific AI instructions, and provides local MCP tools. Repox itself has no external AI integration.
+Repox scans your codebase, maps your project's conventions, generates project-specific AI instructions, and provides local MCP tools. Repox itself has no external AI integration.
 
 ```bash
-# 1. Initialize in your Flutter/Go repo
-repox init
+# 1. One-command setup in your Flutter/Go repo
+repox setup
 
-# 2. Scan and detect conventions automatically
-repox scan
+# 2. Check whether Repox is ready
+repox doctor
 
-# 3. Preview an anatomy-aware generation plan
-repox plan feature investment/new_feature --like investment/fund_list
+# 3. Understand the repo as markdown maps
+repox map --open
 
-# 4. Generate a feature scaffold matching your conventions
-repox generate feature watchlist
+# 4. Explain conventions for humans or AI agents
+repox explain --ai
 
-# 5. Preview without writing
-repox generate feature watchlist --dry-run
+# 5. Preview an anatomy-aware generation plan
+repox plan feature investment/new_feature --like investment/fund_list --ai
 
-# 6. Generate only selected role files
-repox generate feature investment/new_feature --roles bloc,event,state,screen
+# 6. Preview without writing
+repox new feature investment/watchlist --like investment/fund_list --preview
 
-# 7. Reuse the shape of an existing feature flow
-repox generate feature investment/new_feature --like investment/fund_list
+# 7. Generate using the shape of an existing feature flow
+repox new feature investment/watchlist --like investment/fund_list
 
 # 8. Find similar existing features before generating
 repox generate feature watchlist --with-examples
 
-# 9. Generate a project skill for Copilot Enterprise / AI hosts
+# 9. Refresh a project skill for Copilot Enterprise / AI hosts
 repox skill generate
 
 repox learn       # Learn from reviewed local edits
@@ -454,14 +454,24 @@ Repox is offline-only. It has no public/external AI provider integration.
 |---------|-------------|
 | `repox init` | Initialize `.repox/` in your project |
 | `repox scan` | Scan repo and save conventions, feature anatomy, and examples to `.repox/` |
+| `repox scan --ai` | Scan and print compact AI-friendly markdown |
+| `repox setup` | Initialize, scan, and generate `.repox/skill/SKILL.md` in one idempotent command |
+| `repox doctor` | Diagnose Repox readiness and suggested fixes |
+| `repox explain --ai` | Explain scanned conventions with the AI output contract |
+| `repox map --open` | Generate project/convention maps and open rendered map output when available |
 | `repox plan feature <name>` | Preview what would be generated without writing files |
+| `repox plan feature <name> --ai` | Print an AI-friendly generation plan |
 | `repox plan feature <name> --like <existing>` | Preview using an existing feature as the shape reference |
+| `repox new feature <name>` | Friendly alias for `repox generate feature <name>` |
 | `repox generate feature <name>` | Generate a feature scaffold using scanned conventions |
 | `repox generate feature <name> --like <existing>` | Generate using an existing feature's structure and base classes |
 | `repox generate feature <name> --roles bloc,event,state,screen` | Generate only the selected role files |
 | `repox generate feature <name> --dry-run` | Preview file paths without writing |
+| `repox generate feature <name> --preview` | Alias for `--dry-run` |
+| `repox generate feature <name> --dry-run --ai` | Print compact AI-friendly dry-run output |
 | `repox generate feature <name> --force` | Overwrite existing files |
 | `repox generate feature <name> --with-examples` | Show similar existing features before generating |
+| `repox template create --name <name> --from <feature>` | Extract a first-pass reusable template from an indexed feature |
 | `repox learn` | Learn from reviewed local edits to improve future generations |
 | `repox learn --list` | List recorded generations |
 | `repox skill generate` | Generate a project skill file for Copilot Enterprise / AI hosts |

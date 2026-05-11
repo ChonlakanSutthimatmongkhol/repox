@@ -11,11 +11,13 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/generator"
 	"github.com/ChonlakanSutthimatmongkhol/repox/internal/models"
+	"github.com/ChonlakanSutthimatmongkhol/repox/internal/output"
 )
 
 var (
 	planRoles string
 	planLike  string
+	planAI    bool
 )
 
 var planCmd = &cobra.Command{
@@ -33,6 +35,7 @@ var planFeatureCmd = &cobra.Command{
 func init() {
 	planFeatureCmd.Flags().StringVar(&planRoles, "roles", "", "Comma-separated file roles to include in the plan")
 	planFeatureCmd.Flags().StringVar(&planLike, "like", "", "Use an existing feature path/name as the shape reference")
+	planFeatureCmd.Flags().BoolVar(&planAI, "ai", false, "Print compact AI-friendly markdown")
 	planCmd.AddCommand(planFeatureCmd)
 	rootCmd.AddCommand(planCmd)
 }
@@ -83,8 +86,38 @@ func runPlanFeature(cmd *cobra.Command, args []string) error {
 		roles = rolesFromPlannedFiles(featureName, roles, files)
 	}
 
+	if planAI {
+		fmt.Fprint(cmd.OutOrStdout(), buildPlanAI(featureName, planLike, conv, roles, files))
+		return nil
+	}
 	printFeaturePlan(cmd, featureName, planLike, conv, roles, files)
 	return nil
+}
+
+func buildPlanAI(featureName, like string, conv models.Convention, roles []string, files []generator.GeneratedFile) string {
+	paths := make([]string, 0, len(files))
+	for _, file := range files {
+		paths = append(paths, file.Path)
+	}
+	roleText := "all template roles"
+	if len(roles) > 0 {
+		roleText = strings.Join(roles, ", ")
+	}
+	warnings := []string{}
+	if strings.TrimSpace(like) == "" {
+		warnings = append(warnings, "No --like provided. Prefer using a similar existing feature.")
+	}
+	return output.Contract(
+		fmt.Sprintf("Plan for feature `%s`.", featureName),
+		output.BulletList([]string{
+			"Pattern: " + valueOrUnknown(conv.FeatureStructure),
+			"Suggested roles: " + roleText,
+		}),
+		"Files planned:\n"+output.BulletList(paths),
+		output.BulletList(firstFeatureNames(conv, 5)),
+		[]string{"repox generate feature " + featureName + likeCommandPart(like) + " --dry-run", "repox map --feature " + featureName + " --ai"},
+		warnings,
+	)
 }
 
 func rolesFromPlannedFiles(featureName string, roles []string, files []generator.GeneratedFile) []string {

@@ -32,6 +32,10 @@ func registerTools(s *server.MCPServer) {
 	s.AddTool(toolFindSimilar(), handleFindSimilar)
 	s.AddTool(toolLearn(), handleLearn)
 	s.AddTool(toolExplainConvention(), handleExplainConvention)
+	s.AddTool(toolSetup(), handleSetup)
+	s.AddTool(toolDoctor(), handleDoctor)
+	s.AddTool(toolMap(), handleMap)
+	s.AddTool(toolExplain(), handleExplain)
 }
 
 // callResult is a convenience helper to return a plain text result.
