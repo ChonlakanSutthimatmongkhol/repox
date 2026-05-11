@@ -4,7 +4,7 @@
 
 > Generate feature scaffolds that look like your team wrote them — learned from real code, improved by every commit.
 
-![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
 ![Version](https://img.shields.io/badge/Version-v1.0.22-blue?style=flat)
 
@@ -28,13 +28,20 @@ repox map --open
 repox explain --ai
 
 # 5. Preview an anatomy-aware generation plan
-repox plan feature investment/new_feature --like investment/fund_list --ai
+repox plan feature customer_profile/saving_target/new_feature \
+  --like customer_profile/saving_target/landing \
+  --ai
 
 # 6. Preview without writing
-repox new feature investment/watchlist --like investment/fund_list --preview
+repox generate feature customer_profile/saving_target/new_feature \
+  --like customer_profile/saving_target/landing \
+  --roles bloc,event,state,screen,widget \
+  --dry-run
 
 # 7. Generate using the shape of an existing feature flow
-repox new feature investment/watchlist --like investment/fund_list
+repox generate feature customer_profile/saving_target/new_feature \
+  --like customer_profile/saving_target/landing \
+  --roles bloc,event,state,screen,widget
 
 # 8. Find similar existing features before generating
 repox generate feature watchlist --with-examples
@@ -465,7 +472,7 @@ Repox is offline-only. It has no public/external AI provider integration.
 | `repox new feature <name>` | Friendly alias for `repox generate feature <name>` |
 | `repox generate feature <name>` | Generate a feature scaffold using scanned conventions |
 | `repox generate feature <name> --like <existing>` | Generate using an existing feature's structure and base classes |
-| `repox generate feature <name> --roles bloc,event,state,screen` | Generate only the selected role files |
+| `repox generate feature <name> --roles bloc,event,state,screen,widget` | Generate only the selected role files |
 | `repox generate feature <name> --dry-run` | Preview file paths without writing |
 | `repox generate feature <name> --preview` | Alias for `--dry-run` |
 | `repox generate feature <name> --dry-run --ai` | Print compact AI-friendly dry-run output |
@@ -487,6 +494,17 @@ Repox is offline-only. It has no public/external AI provider integration.
 - Pre-wires the UseCase into the bloc constructor
 - Prints a **Next steps** checklist (DI registration, route, repository) after generation
 - Ancillary files with no template (enums, route models, skeleton widgets) are copied and renamed from source
+
+Example:
+
+```bash
+repox generate feature customer_profile/saving_target/new_feature \
+  --like customer_profile/saving_target/landing \
+  --roles bloc,event,state,screen,widget \
+  --dry-run
+```
+
+This previews the files for `customer_profile/saving_target/new_feature` without writing them, reusing the shape of `customer_profile/saving_target/landing` and limiting output to the selected roles.
 
 ---
 
