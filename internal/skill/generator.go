@@ -28,24 +28,24 @@ func BuildProjectSkill(input Input) string {
 	fmt.Fprintln(&b, "## Safety Policy")
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "- Work offline-first. Repox has no external AI provider integration.")
-	fmt.Fprintln(&b, "- Use the local Repox MCP tools when available instead of guessing project structure.")
+	fmt.Fprintln(&b, "- Use Repox CLI outputs and local project memory instead of guessing project structure.")
 	fmt.Fprintln(&b, "- Treat `.repox/conventions.json`, `.repox/examples.json`, and `.repox/lessons.json` as local project memory.")
 	fmt.Fprintln(&b, "- Ask for human review before broad refactors, template rewrites, or changes outside the requested feature.")
 	fmt.Fprintln(&b)
 
 	fmt.Fprintln(&b, "## Required Workflow")
 	fmt.Fprintln(&b)
-	fmt.Fprintln(&b, "1. Run or request `repox_scan` after major project structure changes.")
-	fmt.Fprintln(&b, "2. Call `repox_explain_convention` before generating unfamiliar code.")
-	fmt.Fprintln(&b, "3. Call `repox_find_similar` before creating a feature so existing features guide the result.")
-	fmt.Fprintln(&b, "4. Use `repox_generate` for scaffold files, then edit locally to fit the task.")
+	fmt.Fprintln(&b, "1. Run or request `repox scan --ai` after major project structure changes.")
+	fmt.Fprintln(&b, "2. Run `repox explain --ai` before generating unfamiliar code.")
+	fmt.Fprintln(&b, "3. Run `repox plan feature <name> --like <existing> --ai` before creating a feature so existing features guide the result.")
+	fmt.Fprintln(&b, "4. Use `repox generate feature <name>` for scaffold files, then edit locally to fit the task.")
 	fmt.Fprintln(&b, "5. After human edits, run `repox learn` so future skill generation includes the new lessons.")
 	fmt.Fprintln(&b)
 
 	writeConventions(&b, input.Convention)
 	writeExamples(&b, input.Examples)
 	writeLessons(&b, input.Lessons)
-	writeMCPTools(&b)
+	writeLocalCommands(&b)
 
 	return b.String()
 }
@@ -57,7 +57,7 @@ func BuildCopilotInstructions(input Input) string {
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "# GitHub Copilot Instructions")
 	fmt.Fprintln(&b)
-	fmt.Fprintln(&b, "Follow the Repox project skill below for this repository. Prefer local MCP tools and local project knowledge over free-form generation.")
+	fmt.Fprintln(&b, "Follow the Repox project skill below for this repository. Prefer Repox CLI outputs and local project knowledge over free-form generation.")
 	fmt.Fprintln(&b)
 	fmt.Fprint(&b, BuildProjectSkill(input))
 	return b.String()
@@ -167,16 +167,16 @@ func writeLessons(b *strings.Builder, lessons []models.Lesson) {
 	fmt.Fprintln(b)
 }
 
-func writeMCPTools(b *strings.Builder) {
-	fmt.Fprintln(b, "## Local MCP Tools")
+func writeLocalCommands(b *strings.Builder) {
+	fmt.Fprintln(b, "## Local Commands")
 	fmt.Fprintln(b)
-	fmt.Fprintln(b, "- `repox_scan`: refresh local convention and example indexes.")
-	fmt.Fprintln(b, "- `repox_explain_convention`: summarize conventions before editing.")
-	fmt.Fprintln(b, "- `repox_find_similar`: find local features to copy patterns from.")
-	fmt.Fprintln(b, "- `repox_generate`: create deterministic scaffold files from local templates.")
-	fmt.Fprintln(b, "- `repox_learn`: record lessons from reviewed developer edits.")
+	fmt.Fprintln(b, "- `repox scan --ai`: refresh local convention and example indexes.")
+	fmt.Fprintln(b, "- `repox explain --ai`: summarize conventions before editing.")
+	fmt.Fprintln(b, "- `repox plan feature <name> --like <existing> --ai`: preview generation using a local feature reference.")
+	fmt.Fprintln(b, "- `repox generate feature <name> --like <existing>`: create deterministic scaffold files from local templates.")
+	fmt.Fprintln(b, "- `repox learn`: record lessons from reviewed developer edits.")
 	fmt.Fprintln(b)
-	fmt.Fprintln(b, "Repox MCP never calls an AI provider. The AI host provides reasoning; Repox provides local project knowledge and file-safe generation.")
+	fmt.Fprintln(b, "Repox never calls an AI provider. The AI host provides reasoning; Repox provides local project knowledge and file-safe generation.")
 }
 
 func componentsFor(meta models.FeatureMetadata) []string {

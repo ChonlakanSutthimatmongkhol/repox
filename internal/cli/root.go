@@ -6,24 +6,14 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-
-	"github.com/ChonlakanSutthimatmongkhol/repox/internal/mcp"
 )
 
-const version = "1.0.22"
-
-var mcpMode bool
+const version = "1.0.23"
 
 var rootCmd = &cobra.Command{
 	Use:   "repox",
 	Short: "Generate feature scaffolds matching your repo's conventions",
 	Long:  `Repox scans a codebase, learns project conventions, and generates feature scaffolds matching the team's existing code style.`,
-	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-		if mcpMode {
-			return mcp.Serve()
-		}
-		return nil
-	},
 }
 
 // Execute runs the root command.
@@ -37,5 +27,4 @@ func Execute() {
 func init() {
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("repox v{{.Version}}\n")
-	rootCmd.PersistentFlags().BoolVar(&mcpMode, "mcp", false, "Start as MCP server on stdio")
 }

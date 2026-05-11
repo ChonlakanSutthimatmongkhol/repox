@@ -1,4 +1,4 @@
-// Package output contains small formatting helpers shared by CLI and MCP output.
+// Package output contains small formatting helpers shared by AI-friendly CLI output.
 package output
 
 import (

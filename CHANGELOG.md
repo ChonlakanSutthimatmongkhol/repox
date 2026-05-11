@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.23] — 2026-05-11
+
+### Removed
+
+- Removed MCP server support, including `repox --mcp`, the internal MCP package, MCP tool tests, and the `mcp-go` dependency.
+- Removed MCP setup and tool reference documentation from the README.
+
+### Changed
+
+- Generated project skill instructions now use Repox CLI workflows instead of MCP tool calls.
+
+---
+
 ## [1.0.22] — 2026-05-11
 
 ### Added
@@ -13,7 +26,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - New UX commands: `repox setup`, `repox doctor`, `repox explain`, `repox map`, `repox new feature`, and `repox template`.
 - AI-friendly markdown output for `scan --ai`, `plan feature --ai`, `generate feature --dry-run --ai`, `explain --ai`, and `map --ai`.
 - Markdown/Markmap project maps under `.repox/maps/`, with optional HTML rendering when Markmap is installed.
-- MCP tools for setup, doctor, map, and explain workflows.
 - First-pass template extraction from indexed existing features.
 
 ### Changed
@@ -60,19 +72,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **`repox --mcp`** — starts Repox as an MCP (Model Context Protocol) stdio server; works with Claude Code, GitHub Copilot, and Cursor
-- **`internal/mcp` package** — server setup, tool definitions, and handlers using `github.com/mark3labs/mcp-go`
-- **5 MCP tools exposed:**
-  - `repox_scan` — scan repo, detect conventions, index features
-  - `repox_generate` — generate feature scaffold (supports `use_ai`, `use_examples`, `force`, `dry_run`)
-  - `repox_find_similar` — find structurally similar existing features
-  - `repox_learn` — delegates to CLI with usage hint
-  - `repox_explain_convention` — returns full convention summary in natural language
-- All existing CLI commands (`init`, `scan`, `generate`, `learn`) remain unchanged
+- First stable Repox CLI release for project scanning, feature generation, example retrieval, and local learning.
+- All existing CLI commands (`init`, `scan`, `generate`, `learn`) remain available.
 
 ### Changed
 
-- Go module version bumped to 1.25.5 (required by mcp-go v0.52.0)
 - Version bumped to **1.0.0**
 
 ---
@@ -174,6 +178,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+[1.0.23]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v1.0.22...v1.0.23
+[1.0.22]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v1.0.21...v1.0.22
 [1.0.3]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v1.0.1...v1.0.2
 [1.0.0]: https://github.com/ChonlakanSutthimatmongkhol/repox/compare/v0.5.0...v1.0.0

@@ -2,23 +2,21 @@
 
 **Self-learning scaffold generator that understands your repo's conventions.**
 
-Repox scans your codebase, maps your project conventions, generates project-specific AI instructions, and exposes local MCP tools. It is offline-first and does not call external AI providers.
+Repox scans your codebase, maps your project conventions, and generates project-specific AI instructions. It is offline-first and does not call external AI providers.
 
 ![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Version](https://img.shields.io/badge/Version-v1.0.22-blue?style=flat)
+![Version](https://img.shields.io/badge/Version-v1.0.23-blue?style=flat)
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Installation](#installation)
 - [Feature Generation](#feature-generation)
-- [MCP Setup](#mcp-setup)
 - [Command Reference](#command-reference)
 - [Configuration](#configuration)
 - [How It Works](#how-it-works)
 - [Project Structure](#project-structure)
-- [MCP Tool Reference](#mcp-tool-reference)
 - [Safety](#safety)
 - [License](#license)
 
@@ -145,96 +143,6 @@ repox generate feature <name> --roles bloc,event,state,screen,widget
 
 Common roles include `bloc`, `event`, `state`, `screen`, `widget`, `repository`, `usecase`, `request`, `response`, and `test`.
 
-## MCP Setup
-
-Repox runs as a local MCP stdio server so AI tools can call it directly. Repox itself never calls AI providers.
-
-### 1. Prepare the Project
-
-```bash
-cd /your/flutter-project
-repox init
-repox scan
-repox skill generate
-```
-
-### 2. Configure Your AI Tool
-
-#### Claude Code, Global
-
-Add to `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "repox": {
-      "type": "stdio",
-      "command": "/Users/<you>/go/bin/repox",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
-
-If `repox` is already on your `PATH`, you can use `"command": "repox"`.
-
-#### Claude Code, Project Only
-
-Create `.claude/mcp.json` at the project root:
-
-```json
-{
-  "mcpServers": {
-    "repox": {
-      "type": "stdio",
-      "command": "repox",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
-
-#### GitHub Copilot in VS Code
-
-Create `.vscode/mcp.json` at the project root:
-
-```json
-{
-  "servers": {
-    "repox": {
-      "type": "stdio",
-      "command": "repox",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
-
-Then open the VS Code Command Palette and run `MCP: List Servers`.
-
-#### Cursor
-
-Create or edit `~/.cursor/mcp.json` globally, or `.cursor/mcp.json` in the project:
-
-```json
-{
-  "mcpServers": {
-    "repox": {
-      "command": "repox",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
-
-Restart Cursor after saving. The `repox_*` tools should appear in the tool list.
-
-### 3. Ask Your AI Assistant to Use Repox
-
-```text
-Use repox_scan to detect this project's conventions, then use repox_generate to scaffold a "payments" feature.
-```
-
 ## Command Reference
 
 ### Setup and Discovery
@@ -266,7 +174,7 @@ Use repox_scan to detect this project's conventions, then use repox_generate to 
 | `repox generate feature <name> --force` | Overwrite existing files. |
 | `repox generate feature <name> --with-examples` | Show similar existing features before generating. |
 
-### Learning, Templates, and MCP
+### Learning and Templates
 
 | Command | Description |
 |---|---|
@@ -274,7 +182,6 @@ Use repox_scan to detect this project's conventions, then use repox_generate to 
 | `repox learn` | Learn from reviewed local edits to improve future generations. |
 | `repox learn --list` | List recorded generations. |
 | `repox skill generate` | Generate a project skill file for Copilot Enterprise and other AI hosts. |
-| `repox --mcp` | Start as a local MCP server for Claude Code, GitHub Copilot, or Cursor. |
 | `repox --version` | Print the current version. |
 
 ## Configuration
@@ -361,10 +268,6 @@ graph TB
         LEARNER["Learner"]
     end
 
-    subgraph MCP["MCP Server"]
-        TOOLS["repox_* tools"]
-    end
-
     subgraph STORAGE[".repox Storage"]
         CONV["conventions.json"]
         EXAMPLES["examples.json"]
@@ -378,9 +281,6 @@ graph TB
     CMD_GEN --> RETRIEVER
     CMD_SKILL --> SKILL
     CMD_LEARN --> LEARNER
-    TOOLS --> SCANNER
-    TOOLS --> GENERATOR
-    TOOLS --> RETRIEVER
     SCANNER --> CONV
     RETRIEVER --> EXAMPLES
     LEARNER --> LESSONS
@@ -400,11 +300,13 @@ repox/
 |   |-- config/
 |   |-- generator/
 |   |-- learner/
-|   |-- mcp/
+|   |-- mapgen/
 |   |-- models/
+|   |-- output/
 |   |-- retriever/
 |   |-- scanner/
-|   `-- skill/
+|   |-- skill/
+|   `-- templatex/
 |-- templates/
 |   `-- flutter_bloc_feature/
 |-- .repox/
@@ -418,20 +320,6 @@ repox/
 |-- Makefile
 `-- README.md
 ```
-
-## MCP Tool Reference
-
-Full setup instructions are in [MCP Setup](#mcp-setup).
-
-| Tool | Parameters | Description |
-|---|---|---|
-| `repox_scan` | `project_override?` | Scan the repo, detect conventions, index features, and save `.repox/conventions.json`. |
-| `repox_generate` | `feature_name`, `use_examples?`, `force?`, `dry_run?` | Generate deterministic local scaffolds. |
-| `repox_find_similar` | `feature_name`, `top_n?` | Find structurally similar existing features. |
-| `repox_learn` | `generation_id?`, `auto_approve?` | Return CLI usage hints for `repox learn` and `repox skill generate`. |
-| `repox_explain_convention` | - | Return repo conventions in human-readable format. |
-
-Works with Claude Code, GitHub Copilot in VS Code, and Cursor.
 
 ## Safety
 

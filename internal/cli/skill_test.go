@@ -28,7 +28,7 @@ func TestSkillGenerate_WritesProjectSkillAndCopilotInstructions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(skillContent), "Repox Project Skill")
 	assert.Contains(t, string(skillContent), "offline-first")
-	assert.Contains(t, string(skillContent), "repox_generate")
+	assert.Contains(t, string(skillContent), "repox generate feature")
 
 	copilotContent, err := os.ReadFile(copilotPath)
 	require.NoError(t, err)
