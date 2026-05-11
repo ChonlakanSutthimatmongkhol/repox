@@ -40,19 +40,19 @@ repox map --open
 repox explain --ai
 
 # 5. Preview an anatomy-aware plan
-repox plan feature customer_profile/saving_target/new_feature \
-  --like customer_profile/saving_target/landing \
+repox plan feature module/submodule/new_feature \
+  --like module/submodule/existing_feature \
   --ai
 
 # 6. Preview generated files without writing
-repox generate feature customer_profile/saving_target/new_feature \
-  --like customer_profile/saving_target/landing \
+repox generate feature module/submodule/new_feature \
+  --like module/submodule/existing_feature \
   --roles bloc,event,state,screen,widget \
   --dry-run
 
 # 7. Generate files using an existing feature as the shape reference
-repox generate feature customer_profile/saving_target/new_feature \
-  --like customer_profile/saving_target/landing \
+repox generate feature module/submodule/new_feature \
+  --like module/submodule/existing_feature \
   --roles bloc,event,state,screen,widget
 
 # 8. Refresh project instructions for AI hosts
@@ -101,27 +101,27 @@ Repox can generate a new feature from scanned conventions, or use an existing fe
 ### Preview from an Existing Feature
 
 ```bash
-repox generate feature customer_profile/saving_target/new_feature \
-  --like customer_profile/saving_target/landing \
+repox generate feature module/submodule/new_feature \
+  --like module/submodule/existing_feature \
   --roles bloc,event,state,screen,widget \
   --dry-run
 ```
 
-This previews the files for `customer_profile/saving_target/new_feature` without writing them. It reuses the structure, base classes, and role anatomy from `customer_profile/saving_target/landing`, then limits output to the selected roles.
+This previews the files for `module/submodule/new_feature` without writing them. It reuses the structure, base classes, and role anatomy from `module/submodule/existing_feature`, then limits output to the selected roles.
 
 ### Generate from an Existing Feature
 
 ```bash
-repox generate feature customer_profile/saving_target/new_feature \
-  --like customer_profile/saving_target/landing \
+repox generate feature module/submodule/new_feature \
+  --like module/submodule/existing_feature \
   --roles bloc,event,state,screen,widget
 ```
 
 ### Plan Before Generating
 
 ```bash
-repox plan feature customer_profile/saving_target/new_feature \
-  --like customer_profile/saving_target/landing \
+repox plan feature module/submodule/new_feature \
+  --like module/submodule/existing_feature \
   --ai
 ```
 
